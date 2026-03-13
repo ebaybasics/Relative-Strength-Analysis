@@ -1,0 +1,44 @@
+Ticker,Security Name,Sector,Industry,Price,Weight,Return,Contribution
+ONDS,Ondas Inc.,Information Technology,Communications Equipment,9.83,0.1169,-0.0629,-138.66
+AVAV,AeroVironment Inc.,Industrials,Aerospace and Defense,229.80,0.0860,0.0419,61.09
+RCAT,Red Cat Holdings Inc.,Industrials,Aerospace and Defense,15.36,0.0715,0.0186,23.03
+EH,EHang Holdings Limited,Industrials,Aerospace and Defense,11.51,0.0530,0.0150,13.83
+UMAC,Unusual Machines Inc.,Information Technology,Electronic Equipment Instruments and Components,16.45,0.0453,0.0780,57.89
+AIRO,AIRO Group Holdings Inc.,Industrials,Aerospace and Defense,10.08,0.0384,-0.0156,-10.77
+GE,General Electric Company,Industrials,Aerospace and Defense,323.11,0.0213,-0.0119,-4.52
+PLTR,Palantir Technologies Inc.,Information Technology,Software,157.16,0.0205,0.0294,10.35
+RTX,RTX Corporation,Industrials,Aerospace and Defense,209.76,0.0170,0.0289,8.45
+BA,The Boeing Company,Industrials,Aerospace and Defense,231.11,0.0109,0.0408,7.54
+LMT,Lockheed Martin Corporation,Industrials,Aerospace and Defense,671.77,0.0096,0.0256,4.23
+HON,Honeywell International Inc.,Industrials,Industrial Conglomerates,235.29,0.0093,-0.0130,-2.16
+ZENA,ZenaTech Inc.,Information Technology,Software,2.33,0.0092,-0.0969,-17.44
+AMPX,Amprius Technologies Inc.,Industrials,Electrical Equipment,16.33,0.0075,0.0967,11.68
+NOC,Northrop Grumman Corporation,Industrials,Aerospace and Defense,756.13,0.0062,0.0218,2.34
+HWM,Howmet Aerospace Inc.,Industrials,Aerospace and Defense,250.13,0.0061,-0.0090,-0.97
+TDY,Teledyne Technologies Incorporated,Information Technology,Electronic Equipment Instruments and Components,647.64,0.0053,-0.0110,-1.04
+LHX,L3Harris Technologies Inc.,Industrials,Aerospace and Defense,366.61,0.0053,0.0181,1.66
+MRCY,Mercury Systems Inc.,Industrials,Aerospace and Defense,86.42,0.0049,0.0172,1.46
+KTOS,Kratos Defense & Security Solutions Inc.,Industrials,Aerospace and Defense,87.00,0.0046,0.0171,1.36
+TDG,TransDigm Group Incorporated,Industrials,Aerospace and Defense,1294.53,0.0046,-0.0003,-0.03
+EMBJ,Embraer S.A.,Industrials,Aerospace and Defense,61.69,0.0045,-0.0719,-6.16
+TXT,Textron Inc.,Industrials,Aerospace and Defense,94.96,0.0045,-0.0149,-1.21
+AXON,Axon Enterprise Inc.,Industrials,Aerospace and Defense,574.01,0.0042,0.0062,0.46
+FGXXX,First American Government Obligs X,Unclassified,Unclassified,1.00,0.0007,0.0001,0.00
+DRO AU,DroneShield Ltd,Unclassified,Unclassified,,0.0981,,
+NXSN IT,Next Vision Stabilized Systems Ltd,Unclassified,Unclassified,,0.0875,,
+ELS AU,Elsight Ltd,Unclassified,Unclassified,,0.0644,,
+FLT CN,Volatus Aerospace Inc,Unclassified,Unclassified,,0.0471,,
+DPRO,Draganfly Inc,Unclassified,Unclassified,,0.0292,,
+6232 JP,ACSL LTD,Unclassified,Unclassified,,0.0209,,
+218A JP,Liberaware Co Ltd,Unclassified,Unclassified,,0.0160,,
+PARRO FP,Parrot SA,Unclassified,Unclassified,,0.0131,,
+278A JP,Terra Drone Corp,Unclassified,Unclassified,,0.0130,,
+ESLT,ELBIT SYSTEMS LTD,Unclassified,Unclassified,,0.0067,,
+CHRT LN,Cohort PLC,Unclassified,Unclassified,,0.0063,,
+RHM GR,Rheinmetall AG,Unclassified,Unclassified,,0.0057,,
+BA/ LN,BAE Systems PLC,Unclassified,Unclassified,,0.0053,,
+AM FP,Dassault Aviation SA,Unclassified,Unclassified,,0.0052,,
+SAABB SS,Saab AB,Unclassified,Unclassified,,0.0051,,
+LDO IM,LEONARDO-FINMECCANICA SPA,Unclassified,Unclassified,,0.0048,,
+HO FP,Thales SA,Unclassified,Unclassified,,0.0043,,
+[object Object],Cash & Other,Unclassified,Unclassified,,0.0001,,

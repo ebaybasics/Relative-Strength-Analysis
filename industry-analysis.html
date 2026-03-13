@@ -1,0 +1,1764 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Industry Analysis</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      background: #0d1117;
+      color: #e6edf3;
+      padding: 24px 16px 40px;
+      min-height: 100vh;
+    }
+
+    header { text-align: center; margin-bottom: 24px; }
+    header h1 { font-size: 1.6rem; color: #58a6ff; letter-spacing: 0.5px; margin-bottom: 4px; }
+    header p  { font-size: 0.85rem; color: #8b949e; }
+
+    #status {
+      text-align: center; padding: 32px;
+      color: #8b949e; font-size: 0.95rem;
+    }
+    #status.error { color: #f85149; }
+
+    .prog-wrap {
+      width: 320px; height: 4px; background: #21262d;
+      border-radius: 2px; margin: 12px auto 0; overflow: hidden;
+    }
+    .prog-bar {
+      height: 100%; background: #58a6ff; width: 0%;
+      transition: width 0.15s ease; border-radius: 2px;
+    }
+
+    .controls {
+      display: none; align-items: center; justify-content: space-between;
+      flex-wrap: wrap; gap: 10px; margin-bottom: 14px;
+    }
+    .search-wrap { position: relative; }
+    .search-wrap input {
+      background: #161b22; border: 1px solid #30363d; color: #e6edf3;
+      border-radius: 6px; padding: 7px 12px 7px 30px;
+      font-size: 0.85rem; width: 180px; outline: none;
+    }
+    .search-wrap input:focus { border-color: #58a6ff; }
+    .search-icon {
+      position: absolute; left: 9px; top: 50%; transform: translateY(-50%);
+      color: #484f58; font-size: 0.8rem; pointer-events: none;
+    }
+    .legend {
+      display: flex; gap: 20px; font-size: 0.78rem;
+      color: #8b949e; align-items: center; flex-wrap: wrap;
+    }
+    .legend span::before {
+      display: inline-block; width: 10px; height: 10px;
+      border-radius: 2px; margin-right: 5px; vertical-align: middle; content: '';
+    }
+    .legend .l-pos::before  { background: rgba(63,185,80,0.4); }
+    .legend .l-neg::before  { background: rgba(248,81,73,0.4); }
+    .row-count { font-size: 0.8rem; color: #484f58; }
+
+    .table-wrap { display: none; overflow-x: auto; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+
+    /* Two-row header */
+    thead tr.group-row { background: #0d1117; }
+    thead tr.col-row   { background: #161b22; border-bottom: 2px solid #30363d; }
+
+    th {
+      padding: 9px 12px; text-align: center;
+      color: #8b949e; font-weight: 600; font-size: 0.76rem;
+      text-transform: uppercase; letter-spacing: 0.5px;
+      white-space: nowrap; user-select: none;
+    }
+    th.sortable { cursor: pointer; }
+    th.sortable:hover { color: #58a6ff; }
+    th.active   { color: #58a6ff; }
+    th:first-child, td:first-child { text-align: left; min-width: 200px; }
+
+    .ticker-sym  { display: block; font-weight: 700; color: #e6edf3; letter-spacing: 0.3px; }
+    .ticker-ind  { display: block; font-size: 0.72rem; font-weight: 400; color: #8b949e; margin-top: 1px; white-space: normal; line-height: 1.3; }
+    tbody tr.spy-row .ticker-ind { color: #58a6ff; opacity: 0.7; }
+    tbody tr.failed  .ticker-ind { color: #484f58; }
+
+    th.group-label {
+      color: #3d4551; font-size: 0.7rem; letter-spacing: 1px;
+      padding-bottom: 4px; border-bottom: 1px solid #21262d;
+    }
+    th.sep-l, td.sep-l { border-left: 2px solid #30363d; }
+
+    tbody tr { border-bottom: 1px solid #21262d; transition: background 0.1s; }
+    tbody tr:hover { background: #161b22; }
+    tbody tr.spy-row  td { color: #58a6ff !important; font-weight: 600; }
+    tbody tr.failed   td { color: #484f58 !important; }
+
+    td { padding: 9px 12px; text-align: center; white-space: nowrap; }
+    td:first-child { font-weight: 600; color: #e6edf3; letter-spacing: 0.3px; }
+
+    td.pos  { color: #3fb950; }
+    td.neg  { color: #f85149; }
+    td.zero { color: #8b949e; }
+    td.na   { color: #484f58; }
+
+    .sort-arrow { margin-left: 3px; font-size: 0.68rem; }
+
+    footer {
+      text-align: center; margin-top: 20px;
+      font-size: 0.75rem; color: #484f58;
+    }
+
+    /* ── Percentile table ── */
+    .pct-section { margin-top: 40px; display: none; }
+    .pct-title {
+      font-size: 0.95rem; color: #58a6ff; font-weight: 600;
+      margin-bottom: 12px; padding-bottom: 6px;
+      border-bottom: 1px solid #21262d;
+    }
+    .pct-title small { font-size: 0.75rem; color: #8b949e; font-weight: 400; margin-left: 10px; }
+    #pctTable { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+    #pctTable thead tr { background: #161b22; border-bottom: 2px solid #30363d; }
+    #pctTable th {
+      padding: 9px 12px; text-align: center; color: #8b949e;
+      font-weight: 600; font-size: 0.76rem; text-transform: uppercase;
+      letter-spacing: 0.5px; white-space: nowrap;
+    }
+    #pctTable th:first-child { text-align: left; min-width: 200px; }
+    #pctTable tbody tr { border-bottom: 1px solid #21262d; transition: background 0.1s; }
+    #pctTable tbody tr:hover { background: #161b22; }
+    #pctTable td { padding: 9px 12px; text-align: center; white-space: nowrap; font-weight: 600; }
+    #pctTable td:first-child { text-align: left; color: #8b949e; }
+    #pctSection .table-wrap, #breadthSection .table-wrap { display: block; }
+
+    /* ── Top-10 RS Breadth Chart ── */
+    #topTenSection { margin-top: 32px; }
+    #topTenChart   { padding: 8px 0 4px; max-width: 560px; }
+    .bar-row   { display: flex; align-items: center; margin-bottom: 8px; gap: 12px; }
+    .bar-label { width: 72px; text-align: right; font-size: 0.82rem; color: #c9d1d9; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .bar-track { flex: 1; background: #21262d; border-radius: 4px; height: 24px; position: relative; }
+    .bar-fill       { height: 100%; border-radius: 4px; background: linear-gradient(90deg, #1f6feb, #58a6ff); transition: width 0.3s; }
+    .bar-fill.worst { background: linear-gradient(90deg, #b91c1c, #f87171); }
+    .bar-count { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); font-size: 0.78rem; color: #fff; font-weight: 700; }
+    #botTenSection { margin-top: 24px; }
+    #botTenChart   { padding: 8px 0 4px; max-width: 560px; }
+
+    /* ── Breadth & Diffusion ── */
+    #breadthSection { margin-top: 32px; }
+    #breadthTable { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+    #breadthTable th { background: #161b22; color: #8b949e; font-weight: 600; padding: 8px 10px; text-align: left; border-bottom: 1px solid #21262d; white-space: nowrap; }
+    #breadthTable td { padding: 6px 10px; border-bottom: 1px solid #161b22; vertical-align: middle; }
+    #breadthTable tr:hover td { background: rgba(255,255,255,0.02); }
+    .bdiff-label { color: #e6edf3; white-space: nowrap; }
+    .bdiff-val   { color: #e6edf3; font-weight: 700; text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; min-width: 56px; }
+    .bdiff-bar-cell { width: 180px; min-width: 180px; }
+    .bdiff-bar-track { background: #21262d; border-radius: 3px; height: 12px; position: relative; overflow: visible; }
+    .bdiff-bar-fill  { height: 100%; border-radius: 3px; }
+    .bdiff-signal { white-space: nowrap; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.3px; }
+    .bdiff-desc   { color: #6e7681; font-size: 0.72rem; }
+    .sig-green  { color: #3fb950; }
+    .sig-yellow { color: #e3b341; }
+    .sig-orange { color: #f0883e; }
+    .sig-red    { color: #f85149; }
+
+    /* ── Breadth Oscillators ── */
+    #ema9OscSection, #sma20OscSection, #mcclellanOscSection { margin-top: 32px; }
+    #ema9OscCanvas, #sma20OscCanvas, #mcclellanOscCanvas { display: block; width: 100%; max-width: 760px; height: auto; }
+    #mcclellanBarSelect { background:#21262d; border:1px solid #30363d; color:#e6edf3; padding:4px 8px; border-radius:6px; font-size:0.80rem; cursor:pointer; }
+    #mcclellanBarSelect:focus { outline:none; border-color:#58a6ff; }
+
+    /* ── RS Momentum Regression ── */
+    #momentumSection  { margin-top: 32px; }
+    #velocitySection  { margin-top: 32px; }
+
+    .momentum-wrap    { display: flex; gap: 40px; flex-wrap: wrap; }
+    .momentum-half    { flex: 1; min-width: 260px; }
+    .momentum-sub     { font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #8b949e; margin-bottom: 10px; }
+    .bar-fill.improve { background: linear-gradient(90deg, #166534, #4ade80); }
+    .bar-meta         { font-size: 0.72rem; color: #8b949e; white-space: nowrap; min-width: 120px; }
+
+    /* ── RS Chart Modal ── */
+    #rsChartOverlay { position:fixed; inset:0; background:rgba(0,0,0,0.65); display:flex; align-items:center; justify-content:center; z-index:1000; }
+    #rsChartModal   { background:#161b22; border:1px solid #30363d; border-radius:12px; padding:24px; position:relative; }
+    #rsChartHeader  { display:flex; align-items:center; justify-content:space-between; margin-bottom:16px; }
+    #rsChartTitle   { font-size:1rem; color:#58a6ff; font-weight:600; }
+    #rsChartClose   { background:none; border:none; color:#8b949e; font-size:24px; cursor:pointer; line-height:1; padding:0 4px; }
+    #rsChartClose:hover { color:#e6edf3; }
+    #rsChartCanvas  { display:block; }
+    .ticker-link    { cursor:pointer; }
+    .ticker-link:hover .ticker-sym { color:#58a6ff !important; text-decoration:underline; }
+
+    /* ── Z-Score Chart View ── */
+    #zsView { position:fixed; inset:0; background:#0d1117; overflow-y:auto; z-index:900; display:none; }
+    #zsViewInner { max-width:820px; margin:0 auto; padding:28px 24px; }
+    #zsViewHeader { display:flex; align-items:center; justify-content:space-between; margin-bottom:24px; padding-bottom:16px; border-bottom:1px solid #21262d; }
+    #zsViewTitle  { font-size:1.1rem; color:#58a6ff; font-weight:600; }
+    #zsViewMeta   { font-size:0.78rem; color:#6e7681; }
+    #zsViewClose  { background:none; border:none; color:#8b949e; font-size:24px; cursor:pointer; line-height:1; }
+    #zsViewClose:hover { color:#e6edf3; }
+    #zsViewGrid   { display:flex; flex-direction:column; gap:12px; }
+    .zs-card      { background:#161b22; border:1px solid #21262d; border-radius:8px; padding:14px 16px; }
+    .zs-card-header { display:flex; align-items:baseline; gap:10px; margin-bottom:8px; }
+    .zs-ticker    { font-size:0.88rem; font-weight:700; color:#e6edf3; letter-spacing:0.3px; }
+    .zs-score     { font-size:0.82rem; font-weight:600; }
+    .zs-score.pos { color:#3fb950; }
+    .zs-score.neg { color:#f85149; }
+    .zs-canvas    { display:block; width:100%; height:auto; }
+    #zsNavLink    { font-size:0.82rem; color:#8b949e; text-decoration:none; border:1px solid #30363d; border-radius:6px; padding:4px 10px; white-space:nowrap; }
+    #zsNavLink:hover { color:#58a6ff; border-color:#58a6ff; }
+    #zsLookbackSelect, #zsChartTypeSelect, #zsBarSelect { background:#21262d; border:1px solid #30363d; color:#e6edf3; padding:5px 10px; border-radius:6px; font-size:0.82rem; cursor:pointer; }
+    #zsLookbackSelect:focus, #zsChartTypeSelect:focus, #zsBarSelect:focus { outline:none; border-color:#58a6ff; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Industry Analysis</h1>
+  <p>Excess return vs SPY &mdash; 1H / 1D / 1W / 3W / 5W / 7W / 12W &nbsp;|&nbsp; Today's Change &nbsp;|&nbsp; % Distance from MA</p>
+</header>
+
+<div id="status">
+  Fetching market data&hellip;
+  <div class="prog-wrap"><div class="prog-bar" id="progress"></div></div>
+</div>
+
+<div class="controls" id="controls">
+  <div class="search-wrap">
+    <span class="search-icon">&#9906;</span>
+    <input type="text" id="filterInput" placeholder="Filter ticker&hellip;" oninput="applyFilter()"/>
+  </div>
+  <div class="legend">
+    <span class="l-pos">Outperforming SPY</span>
+    <span class="l-neg">Underperforming SPY</span>
+  </div>
+  <div class="row-count" id="rowCount"></div>
+  <a href="#" id="zsNavLink" onclick="toggleZSView(event)">&#8645; Z-Score Charts</a>
+</div>
+
+<div class="table-wrap" id="tableWrap">
+  <table id="rsTable">
+    <thead>
+      <tr class="group-row">
+        <th rowspan="2" class="sortable" data-col="ticker">Ticker<span class="sort-arrow" id="arr-ticker"></span></th>
+        <th rowspan="2" class="sortable" data-col="today">Today<span class="sort-arrow" id="arr-today"></span></th>
+        <th rowspan="2" class="sortable" data-col="rsi14">RSI<span class="sort-arrow" id="arr-rsi14"></span></th>
+        <th colspan="9" class="group-label sep-l">&#9671; Relative Strength vs SPY</th>
+        <th colspan="4" class="group-label sep-l">&#9671; % Distance from MA</th>
+      </tr>
+      <tr class="col-row">
+        <th class="sortable sep-l" data-col="h1">1H<span class="sort-arrow" id="arr-h1"></span></th>
+        <th class="sortable" data-col="d1">1D<span class="sort-arrow" id="arr-d1"></span></th>
+        <th class="sortable" data-col="w1">0–1W<span class="sort-arrow" id="arr-w1"></span></th>
+        <th class="sortable" data-col="w3">1–3W<span class="sort-arrow" id="arr-w3"></span></th>
+        <th class="sortable" data-col="w5">3–5W<span class="sort-arrow" id="arr-w5"></span></th>
+        <th class="sortable" data-col="w7">5–7W<span class="sort-arrow" id="arr-w7"></span></th>
+        <th class="sortable" data-col="w9">7–9W<span class="sort-arrow" id="arr-w9"></span></th>
+        <th class="sortable" data-col="w11">9–11W<span class="sort-arrow" id="arr-w11"></span></th>
+        <th class="sortable" data-col="w13">11–13W<span class="sort-arrow" id="arr-w13"></span></th>
+        <th class="sortable sep-l" data-col="ema9">9 EMA<span class="sort-arrow" id="arr-ema9"></span></th>
+        <th class="sortable" data-col="sma20">20 SMA<span class="sort-arrow" id="arr-sma20"></span></th>
+        <th class="sortable" data-col="sma50">50 SMA<span class="sort-arrow" id="arr-sma50"></span></th>
+        <th class="sortable" data-col="sma200">200 SMA<span class="sort-arrow" id="arr-sma200"></span></th>
+      </tr>
+    </thead>
+    <tbody id="tableBody"></tbody>
+  </table>
+</div>
+
+<!-- ── Percentile Rankings ── -->
+<div class="pct-section" id="pctSection">
+  <div class="pct-title">Percentile Rankings<small>rank within visible set &nbsp;·&nbsp; 100 = strongest &nbsp;·&nbsp; 0 = weakest</small></div>
+  <div class="table-wrap">
+    <table id="pctTable">
+      <thead>
+        <tr>
+          <th class="sortable" data-col="ticker">Ticker</th>
+          <th class="sortable" data-col="today">Today</th>
+          <th class="sortable" data-col="rsi14">RSI</th>
+          <th class="sortable sep-l" data-col="h1">1H</th>
+          <th class="sortable" data-col="d1">1D</th>
+          <th class="sortable" data-col="w1">0–1W</th>
+          <th class="sortable" data-col="w3">1–3W</th>
+          <th class="sortable" data-col="w5">3–5W</th>
+          <th class="sortable" data-col="w7">5–7W</th>
+          <th class="sortable" data-col="w9">7–9W</th>
+          <th class="sortable" data-col="w11">9–11W</th>
+          <th class="sortable" data-col="w13">11–13W</th>
+          <th class="sortable sep-l" data-col="ema9">9 EMA</th>
+          <th class="sortable" data-col="sma20">20 SMA</th>
+          <th class="sortable" data-col="sma50">50 SMA</th>
+          <th class="sortable" data-col="sma200">200 SMA</th>
+        </tr>
+      </thead>
+      <tbody id="pctBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- ── RS Breadth Bar Chart ── -->
+<div id="topTenSection" style="display:none">
+  <div class="pct-title">RS Breadth — Top 10<small>count of RS categories (1H · 1D · 0–1W · 1–3W · 3–5W · 5–7W · 7–9W · 9–11W · 11–13W) ranked ≥ 90th percentile</small></div>
+  <div id="topTenChart"></div>
+</div>
+
+<div id="botTenSection" style="display:none">
+  <div class="pct-title">RS Breadth — Worst 10<small>count of RS categories (1H · 1D · 0–1W · 1–3W · 3–5W · 5–7W · 7–9W · 9–11W · 11–13W) ranked ≤ 10th percentile</small></div>
+  <div id="botTenChart"></div>
+</div>
+
+<div id="breadthSection" style="display:none">
+  <div class="pct-title">Market Breadth &amp; Diffusion<small>computed across all loaded tickers · signals update on each render</small></div>
+  <div class="table-wrap">
+    <table id="breadthTable">
+      <thead>
+        <tr>
+          <th>Metric</th>
+          <th style="text-align:right">Value</th>
+          <th>Distribution</th>
+          <th>Signal</th>
+          <th>Description</th>
+        </tr>
+      </thead>
+      <tbody id="breadthBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<div id="ema9OscSection" style="display:none">
+  <div class="pct-title">9 EMA Breadth Oscillator<small>% of tickers with price above 9 EMA · last year · updates with filter</small></div>
+  <canvas id="ema9OscCanvas" width="760" height="200"></canvas>
+</div>
+
+<div id="sma20OscSection" style="display:none">
+  <div class="pct-title">20 SMA Breadth Oscillator<small>% of tickers with price above 20 SMA · last year · updates with filter</small></div>
+  <canvas id="sma20OscCanvas" width="760" height="200"></canvas>
+</div>
+
+<div id="mcclellanOscSection" style="display:none">
+  <div class="pct-title" style="display:flex;align-items:center;justify-content:space-between">
+    <span>McClellan Oscillator<small>19-EMA minus 39-EMA of net daily advances − declines · updates with filter</small></span>
+    <select id="mcclellanBarSelect" onchange="renderMcClellanOscillator()">
+      <option value="9">9 Bars</option>
+      <option value="20">20 Bars</option>
+      <option value="50">50 Bars</option>
+      <option value="100">100 Bars</option>
+      <option value="150">150 Bars</option>
+      <option value="200" selected>200 Bars</option>
+    </select>
+  </div>
+  <canvas id="mcclellanOscCanvas" width="760" height="140"></canvas>
+</div>
+
+<div id="momentumSection" style="display:none">
+  <div class="pct-title">RS Momentum — Weighted Trend Regression<small>weighted OLS across time buckets · recency weights 7→1 · R² ≥ 0.50 consistency filter · m &gt; 0 = structural improvement</small></div>
+  <div class="momentum-wrap">
+    <div class="momentum-half">
+      <div class="momentum-sub">▲ Top 5 Improvers</div>
+      <div id="momentumTopChart"></div>
+    </div>
+    <div class="momentum-half">
+      <div class="momentum-sub">▼ Bottom 5 Decayers</div>
+      <div id="momentumBotChart"></div>
+    </div>
+  </div>
+</div>
+
+<div id="velocitySection" style="display:none">
+  <div class="pct-title">Z-Score Velocity — Log-Time Regression<small>cross-sectional z-score per bucket · ln(days) axis compresses 1H↔12W gap · uniform OLS · v &gt; 0 = recent outperformance vs peers</small></div>
+  <div class="momentum-wrap">
+    <div class="momentum-half">
+      <div class="momentum-sub">▲ Top 5 Accelerating</div>
+      <div id="velocityTopChart"></div>
+    </div>
+    <div class="momentum-half">
+      <div class="momentum-sub">▼ Bottom 5 Decelerating</div>
+      <div id="velocityBotChart"></div>
+    </div>
+  </div>
+</div>
+
+
+<footer id="footer"></footer>
+
+<script>
+  const TICKERS = [
+    "VIXY","USO","UNG","WEAT","GSG","UGA","YOLO","DBC","SHLD","DRNZ",
+    "JEDI","SLV","CORN","SOYB","DBB","GLD","IAU","DBA","KWEB","NATO",
+    "ITA","WCLD","EWY","PPA","FXI","ALLW","FXC","FCG","SEA","CTA",
+    "XLP","CLOU","HACK","IGV","CIBR","MOO","FXB","XOP","TIP","XAR",
+    "FXA","XLE","SCHP","CPER","XBI","CLOD","SHY","BIL","TFLO","FXE",
+    "FM","UUP","IEF","SPAM","MBB","AMLP","AGG","SPLV","USMV","FXY",
+    "EWZ","LIT","SKYY","IGF","CDX","LQD","XLU","PGX","TLT","GDXJ",
+    "GDX","BKLN","GLIN","EWU","REZ","HYG","JNK","AAXJ","REAL","EEM",
+    "ARKX","PJP","PFF","IBB","IXJ","VGK","IAK","SRVR","INDA","OZEM",
+    "FALN","XLV","WISE","XLC","VHT","UFO","EWG","RWL","MOAT","DTCR",
+    "POWR","CAIE","CGW","FEZ","WOOD","EWC","EMXC","PNQI","IPAY","IVE",
+    "HRTS","INDS","HUMN","IDMO","XLRE","BOTT","NXTG","CUT","VNQ","BOAT",
+    "MUSQ","AIQ","FINX","VOX","SILJ","RSP","DXJ","XHS","FDN","PAWZ",
+    "PRNT","PSIL","XLI","ACES","EWT","QQQE","XLF","EWJ","BETZ","GRID",
+    "BOTZ","THRO","OIH","VFH","IFRA","QUAL","TAN","PHO","PSP","IVW",
+    "VIS","ARTY","HOMZ","EATZ","XLY","ARKQ","CWB","XRT","ROBO","PEJ",
+    "CARZ","XLB","IHI","QTUM","IWN","ICLN","EWW","XLK","VLUE","AI",
+    "ITB","SAMM","XHE","MTUM","IWM","SIMS","XME","NLR","IWO","XHB",
+    "KRE","URA","KCE","PAVE","FTXR","JETS","COPX","VNM","IYT","XSD",
+    "TECH","SMH","URNM","TUR","LUXE","SOXX","XTN","IBIT","BTC","PSI",
+    "BITQ","SVXY","WGMI","BDRY"
+  ];
+
+  const RS_COLS     = ['h1','d1','w1','w3','w5','w7','w9','w11','w13'];
+  const ALL_COLS    = ['ticker','today','rsi14','h1','d1','w1','w3','w5','w7','w9','w11','w13','ema9','sma20','sma50','sma200'];
+  const VALUE_COLS  = ['today','rsi14','h1','d1','w1','w3','w5','w7','w9','w11','w13','ema9','sma20','sma50','sma200'];
+  const SEP_COLS    = new Set(['h1','ema9']);
+  const BATCH_SIZE    = 5;
+  const BATCH_DELAY   = 500;
+  const FETCH_TIMEOUT = 10000;
+  const MAX_RETRIES   = 2;
+
+  // CORS proxy pool — tried in order, first success wins
+  const PROXIES = [
+    u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
+    u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
+    u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
+  ];
+
+  // Tickers that need a different Yahoo Finance symbol
+  const SYMBOL_MAP = {
+    'BTC': 'BTC-USD',
+  };
+
+  const INDUSTRY_MAP = {
+    "USO":"Oil (WTI Crude)","UNG":"Natural Gas","WEAT":"Wheat","CORN":"Corn","SOYB":"Soybeans",
+    "DBA":"Agriculture (Broad)","DBB":"Base Metals","GLD":"Gold (Physical)","IAU":"Gold (Physical)",
+    "SLV":"Silver (Physical)","CPER":"Copper","XLE":"Energy Select Sector",
+    "XOP":"Oil & Gas E&P","FCG":"Nat Gas E&P","OIH":"Oil Services","GSG":"Broad Commodities",
+    "DBC":"Commodity Tracking","URA":"Uranium & Nuclear","URNM":"Uranium Miners",
+    "LIT":"Lithium & Battery Tech","COPX":"Copper Miners","XME":"Metals & Mining",
+    "WOOD":"Timber & Forestry","CUT":"Timber & Lumber",
+    "VIXY":"VIX Short-Term Futures","SVXY":"Short VIX (Inverse Vol)","CTA":"Managed Futures",
+    "MOAT":"Wide Moat (Value)","QUAL":"Quality Factor","MTUM":"Momentum Factor",
+    "VLUE":"Value Factor","SPLV":"Low Volatility","USMV":"Min Volatility",
+    "RSP":"S&P 500 Equal Weight","QQQE":"Nasdaq 100 Equal Weight",
+    "WCLD":"Cloud Computing","CLOU":"Cloud Computing","HACK":"Cybersecurity",
+    "CIBR":"Cybersecurity","IGV":"Software","SKYY":"Cloud Computing",
+    "ARKQ":"Autonomous Tech & Robotics","ARKX":"Space Exploration","ROBO":"Robotics & Automation",
+    "BOTZ":"Robotics & AI","AI":"Artificial Intelligence","AIQ":"AI & Big Data",
+    "QTUM":"Quantum Computing & ML","TECH":"Technology Selection","SOXX":"Semiconductors",
+    "SMH":"Semiconductors","XSD":"Semiconductors","PSI":"Semiconductors",
+    "PNQI":"Internet (Nasdaq)","FDN":"Internet","IPAY":"Mobile Payments","FINX":"Fintech",
+    "BETZ":"Sports Betting & Gaming","UFO":"Space & Satellite","DRNZ":"Drones & UAVs",
+    "PRNT":"3D Printing",
+    "XLV":"Healthcare Select Sector","VHT":"Healthcare (Broad)","XBI":"Biotechnology",
+    "IBB":"Biotechnology","PJP":"Pharmaceuticals","IHI":"Medical Devices",
+    "XHE":"Healthcare Equipment","HRTS":"Healthcare Equip/Services",
+    "XLF":"Financial Select Sector","KRE":"Regional Banking","KCE":"Capital Markets",
+    "VFH":"Financials (Broad)","XLI":"Industrials Select Sector","VIS":"Industrials (Broad)",
+    "ITA":"Aerospace & Defense","PPA":"Aerospace & Defense","XAR":"Aerospace & Defense",
+    "JETS":"Airlines","IYT":"Transportation","XTN":"Transportation","BOAT":"Shipping",
+    "BDRY":"Dry Bulk Freight","PAVE":"Infrastructure","IFRA":"Infrastructure",
+    "GRID":"Smart Grid & Infrastructure","XLB":"Materials Select Sector",
+    "XLRE":"Real Estate Select Sector","VNQ":"Real Estate (REITs)",
+    "REZ":"Residential Real Estate","SRVR":"Data Center/Tower REITs",
+    "INDS":"Industrial REITs","HOMZ":"Housing & Real Estate","ITB":"Homebuilders",
+    "XHB":"Homebuilders","XLU":"Utilities Select Sector","PHO":"Water Resources",
+    "CGW":"Water Management",
+    "XLP":"Consumer Staples Select Sector","XLY":"Consumer Discretionary Select Sector",
+    "XRT":"Retail","MOO":"Agribusiness","YOLO":"Cannabis","PSIL":"Psychedelics",
+    "TAN":"Solar Energy","ICLN":"Clean Energy","ACES":"Clean Energy",
+    "EATZ":"Food & Beverage","PEJ":"Leisure & Entertainment","CARZ":"Automobile Manufacturers",
+    "PAWZ":"Pet Care","SHLD":"Defense/Security","NATO":"Defense/Security (Thematic)",
+    "MUSQ":"Music & Entertainment",
+    "FXI":"China Large-Cap","KWEB":"China Internet","EWY":"South Korea","EWZ":"Brazil",
+    "EWJ":"Japan","DXJ":"Japan (Hedged)","FXY":"Japanese Yen","EWU":"United Kingdom",
+    "EWG":"Germany","EWC":"Canada","EWW":"Mexico","EWT":"Taiwan","INDA":"India",
+    "TUR":"Turkey","VNM":"Vietnam","EEM":"Emerging Markets","AAXJ":"Asia Ex-Japan",
+    "VGK":"Europe (Broad)","FEZ":"Euro Stoxx 50","FM":"Frontier Markets",
+    "SHY":"Short-Term Treasuries (1-3Y)","IEF":"Intermediate Treasuries (7-10Y)",
+    "TLT":"Long-Term Treasuries (20Y+)","BIL":"T-Bills (1-3M)","TFLO":"Floating Rate Treasuries",
+    "TIP":"TIPS (Inflation Protected)","SCHP":"TIPS (Inflation Protected)",
+    "AGG":"US Aggregate Bond","LQD":"Inv Grade Corp Bonds","HYG":"High Yield Corp Bonds",
+    "JNK":"High Yield Corp Bonds","FALN":"Fallen Angel HY Bonds","MBB":"Mortgage Backed Securities",
+    "BKLN":"Senior Loans","PFF":"Preferred Stock","PGX":"Preferred Stock",
+    "IBIT":"Bitcoin (Spot ETF)","BTC":"Bitcoin (Direct)","BITQ":"Crypto Industry/Miners",
+    "WGMI":"Bitcoin Mining",
+    "IWM":"Russell 2000 (Small Cap)","IWO":"Russell 2000 Growth","IWN":"Russell 2000 Value",
+    "XHS":"Healthcare Services","AMLP":"MLP Energy Infrastructure",
+    "GDX":"Gold Miners","GDXJ":"Junior Gold Miners","SILJ":"Silver Miners",
+    "NLR":"Nuclear & Uranium","LUXE":"Luxury Goods",
+  };
+
+  let tableData       = [];
+  let filteredData    = [];
+  let _benchDailyRef  = null;
+  let _benchHourlyRef = null;
+  let sortCol         = 'w9';
+  let sortDir      = -1;
+
+  // ── Fetch ─────────────────────────────────────────────────────────────────
+
+  async function fetchCloses(ticker, interval, range) {
+    const sym  = SYMBOL_MAP[ticker] || ticker;
+    const base = `https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=${interval}&range=${range}`;
+
+    let lastErr;
+    for (let pi = 0; pi < PROXIES.length; pi++) {
+      try {
+        const url        = PROXIES[pi](base);
+        const controller = new AbortController();
+        const timer      = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
+        let res;
+        try {
+          res = await fetch(url, { signal: controller.signal });
+        } finally {
+          clearTimeout(timer);
+        }
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = await res.json();
+        const raw  = json.chart.result[0].indicators.quote[0].close;
+        const out  = [];
+        let last   = null;
+        for (const v of raw) {
+          if (v != null) last = v;
+          if (last != null) out.push(last);
+        }
+        if (!out.length) throw new Error('empty');
+        return out;                         // success — return immediately
+      } catch (e) {
+        lastErr = e;
+        if (pi < PROXIES.length - 1) await sleep(250); // brief pause before next proxy
+      }
+    }
+    throw lastErr; // all proxies exhausted
+  }
+
+  async function fetchWithRetry(ticker, interval, range) {
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        return await fetchCloses(ticker, interval, range);
+      } catch (e) {
+        if (attempt === MAX_RETRIES) throw e;
+        await sleep(500 * Math.pow(2, attempt)); // 500ms, 1000ms
+      }
+    }
+  }
+
+  async function loadTicker(ticker) {
+    const [d, h] = await Promise.allSettled([
+      fetchWithRetry(ticker, '1d', '1y'),
+      fetchWithRetry(ticker, '1h', '5d')
+    ]);
+    return {
+      daily:  d.status === 'fulfilled' ? d.value : null,
+      hourly: h.status === 'fulfilled' ? h.value : null
+    };
+  }
+
+  // ── Math ──────────────────────────────────────────────────────────────────
+
+  function ret(c, n) {
+    if (!c || c.length <= n) return null;
+    return (c[c.length-1] / c[c.length-1-n] - 1) * 100;
+  }
+
+  function sma(c, n) {
+    if (!c || c.length < n) return null;
+    return c.slice(-n).reduce((s,v) => s+v, 0) / n;
+  }
+
+  function ema(c, n) {
+    if (!c || c.length < n) return null;
+    const k = 2/(n+1);
+    let e = c.slice(0,n).reduce((s,v) => s+v, 0) / n;
+    for (let i = n; i < c.length; i++) e = c[i]*k + e*(1-k);
+    return e;
+  }
+
+  function emaFullSeries(c, n) {
+    const out = new Array(c.length).fill(null);
+    if (!c || c.length < n) return out;
+    const k = 2 / (n + 1);
+    let e = c.slice(0, n).reduce((s, v) => s + v, 0) / n;
+    out[n - 1] = e;
+    for (let i = n; i < c.length; i++) { e = c[i] * k + e * (1 - k); out[i] = e; }
+    return out;
+  }
+
+  function smaFullSeries(c, n) {
+    const out = new Array(c.length).fill(null);
+    if (!c || c.length < n) return out;
+    let sum = c.slice(0, n).reduce((s, v) => s + v, 0);
+    out[n - 1] = sum / n;
+    for (let i = n; i < c.length; i++) { sum += c[i] - c[i - n]; out[i] = sum / n; }
+    return out;
+  }
+
+  // Cumulative return from today (used for 1D)
+  function rs(tc, sc, n) {
+    const t = ret(tc, n), s = ret(sc, n);
+    return (t != null && s != null) ? t - s : null;
+  }
+
+  // Discrete window return: from `fromDays` back to `toDays` back (non-overlapping)
+  function retW(c, fromDays, toDays) {
+    if (!c || c.length <= toDays) return null;
+    return (c[c.length - 1 - fromDays] / c[c.length - 1 - toDays] - 1) * 100;
+  }
+
+  function rsW(tc, sc, fromDays, toDays) {
+    const t = retW(tc, fromDays, toDays);
+    const s = retW(sc, fromDays, toDays);
+    return (t != null && s != null) ? t - s : null;
+  }
+
+  function distMA(price, ma) {
+    return (price != null && ma != null) ? (price/ma - 1)*100 : null;
+  }
+
+  function rsi(c, period = 14) {
+    if (!c || c.length < period * 2) return null;
+    let avgGain = 0, avgLoss = 0;
+    for (let i = 1; i <= period; i++) {
+      const d = c[i] - c[i - 1];
+      if (d > 0) avgGain += d; else avgLoss -= d;
+    }
+    avgGain /= period; avgLoss /= period;
+    for (let i = period + 1; i < c.length; i++) {
+      const d = c[i] - c[i - 1];
+      avgGain = (avgGain * (period - 1) + (d > 0 ? d : 0)) / period;
+      avgLoss = (avgLoss * (period - 1) + (d < 0 ? -d : 0)) / period;
+    }
+    return avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss);
+  }
+
+  function buildRow(ticker, daily, hourly, spyD, spyH) {
+    const price = daily ? daily[daily.length-1] : null;
+    const _ema9s  = daily ? emaFullSeries(daily, 9)  : null;
+    const _sma20s = daily ? smaFullSeries(daily, 20) : null;
+    const ema9AboveSeries  = _ema9s  ? daily.map((c, i) => _ema9s[i]  != null ? c > _ema9s[i]  : null) : null;
+    const sma20AboveSeries = _sma20s ? daily.map((c, i) => _sma20s[i] != null ? c > _sma20s[i] : null) : null;
+    return {
+      ticker, failed: !daily, ema9AboveSeries, sma20AboveSeries,
+      _daily:  daily  ? daily.slice(-205)  : null,
+      _hourly: hourly ? hourly.slice(-80)  : null,
+      today:  ret(daily, 1),
+      rsi14:  rsi(daily, 14),
+      h1:     rs(hourly, spyH, 1),
+      d1:     rs(daily,  spyD, 1),
+      w1:     rsW(daily, spyD,  0,  5),  // today  → 1W ago
+      w3:     rsW(daily, spyD,  5, 15),  // 1W ago → 3W ago
+      w5:     rsW(daily, spyD, 15, 25),  // 3W ago → 5W ago
+      w7:     rsW(daily, spyD, 25, 35),  // 5W ago → 7W ago
+      w9:     rsW(daily, spyD, 35, 45),  // 7W ago → 9W ago
+      w11:    rsW(daily, spyD, 45, 55),  // 9W ago → 11W ago
+      w13:    rsW(daily, spyD, 55, 65),  // 11W ago → 13W ago
+      ema9:   distMA(price, ema(daily, 9)),
+      sma20:  distMA(price, sma(daily, 20)),
+      sma50:  distMA(price, sma(daily, 50)),
+      sma150: distMA(price, sma(daily, 150)),
+      sma200: distMA(price, sma(daily, 200)),
+    };
+  }
+
+  // ── Load ──────────────────────────────────────────────────────────────────
+
+  async function loadData() {
+    const statusEl  = document.getElementById('status');
+    const allNeeded = [...new Set([...TICKERS, 'SPY'])];
+    const store     = {};
+    let done        = 0;
+
+    function setStatus() {
+      statusEl.innerHTML = `Loading tickers&hellip; ${done} / ${allNeeded.length}
+        <div class="prog-wrap"><div class="prog-bar" id="progress" style="width:${Math.round(done/allNeeded.length*100)}%"></div></div>`;
+    }
+    setStatus();
+
+    for (let i = 0; i < allNeeded.length; i += BATCH_SIZE) {
+      const batch = allNeeded.slice(i, i + BATCH_SIZE);
+      await Promise.all(batch.map(async t => {
+        try   { store[t] = await loadTicker(t); }
+        catch { store[t] = { daily: null, hourly: null }; }
+        done++;
+        const bar = document.getElementById('progress');
+        if (bar) bar.style.width = `${Math.round(done/allNeeded.length*100)}%`;
+      }));
+      setStatus();
+      if (i + BATCH_SIZE < allNeeded.length) await sleep(BATCH_DELAY);
+    }
+
+    const spyD = store['SPY']?.daily;
+    const spyH = store['SPY']?.hourly;
+    if (!spyD) { showError('Could not load SPY data. Check connection and retry.'); return; }
+    _benchDailyRef  = spyD;
+    _benchHourlyRef = spyH;
+
+    tableData = TICKERS.map(t => buildRow(t, store[t]?.daily, store[t]?.hourly, spyD, spyH));
+    statusEl.style.display = 'none';
+    document.getElementById('controls').style.display = 'flex';
+    document.getElementById('tableWrap').style.display = 'block';
+    document.getElementById('footer').textContent =
+      `Data via Yahoo Finance · Updated ${new Date().toLocaleString()} · RS = excess return vs SPY (pp) · MA dist = % above/below moving average`;
+
+    attachSortHandlers();
+    applyFilter();
+  }
+
+  // ── Filter ────────────────────────────────────────────────────────────────
+
+  function applyFilter() {
+    const q = (document.getElementById('filterInput')?.value || '').toUpperCase().trim();
+    filteredData = q ? tableData.filter(r =>
+      r.ticker.includes(q) || (INDUSTRY_MAP[r.ticker] || '').toUpperCase().includes(q)
+    ) : tableData;
+    renderTable();
+    document.getElementById('rowCount').textContent =
+      filteredData.length < tableData.length
+        ? `${filteredData.length} / ${tableData.length}`
+        : `${tableData.length} tickers`;
+  }
+
+  // ── Percentile ────────────────────────────────────────────────────────────
+
+  function computeRankMap() {
+    const rankMap = {};
+    for (const col of VALUE_COLS) {
+      const valid = filteredData
+        .filter(r => !r.failed && r[col] != null)
+        .slice()
+        .sort((a, b) => a[col] - b[col]);
+      const n = valid.length;
+      valid.forEach((row, i) => {
+        if (!rankMap[row.ticker]) rankMap[row.ticker] = {};
+        rankMap[row.ticker][col] = n <= 1 ? 50 : Math.round((i / (n - 1)) * 100);
+      });
+    }
+    return rankMap;
+  }
+
+  function pctBg(pct) {
+    if (pct >= 80) return `rgba(63,185,80,${(0.10 + (pct-80)/20*0.30).toFixed(2)})`;
+    if (pct >= 60) return `rgba(63,185,80,${((pct-60)/20*0.10).toFixed(2)})`;
+    if (pct >  40) return '';
+    if (pct >= 20) return `rgba(248,81,73,${((40-pct)/20*0.10).toFixed(2)})`;
+    return `rgba(248,81,73,${(0.10 + (20-pct)/20*0.30).toFixed(2)})`;
+  }
+
+  function renderPercentileTable(sortedRows) {
+    const rankMap  = computeRankMap();
+    const pctBody  = document.getElementById('pctBody');
+    pctBody.innerHTML = '';
+
+    for (const row of sortedRows) {
+      if (row.failed) continue;
+      const ranks = rankMap[row.ticker] || {};
+      const tr    = document.createElement('tr');
+
+      // Ticker cell — show symbol + industry (same as main table)
+      const tdT   = document.createElement('td');
+      const sym   = document.createElement('span');
+      sym.className = 'ticker-sym'; sym.textContent = row.ticker;
+      tdT.appendChild(sym);
+      const ind = INDUSTRY_MAP[row.ticker];
+      if (ind) {
+        const indEl = document.createElement('span');
+        indEl.className = 'ticker-ind'; indEl.textContent = ind;
+        tdT.appendChild(indEl);
+      }
+      tr.appendChild(tdT);
+
+      for (const col of VALUE_COLS) {
+        const td  = document.createElement('td');
+        const pct = ranks[col];
+        const sep = SEP_COLS.has(col);
+        if (pct == null) {
+          td.textContent = '—';
+          td.className = (sep ? 'sep-l ' : '') + 'na';
+        } else {
+          td.textContent = pct;
+          const cls = pct >= 60 ? 'pos' : pct <= 40 ? 'neg' : 'zero';
+          td.className = (sep ? 'sep-l ' : '') + cls;
+          const bg = pctBg(pct);
+          if (bg) td.style.backgroundColor = bg;
+        }
+        tr.appendChild(td);
+      }
+      pctBody.appendChild(tr);
+    }
+    document.getElementById('pctSection').style.display = 'block';
+    renderTopTenChart(rankMap);
+    renderBotTenChart(rankMap);
+    renderBreadthTable();
+    renderMomentumChart(rankMap);
+    renderVelocityChart();
+  }
+
+  function renderTopTenChart(rankMap) {
+    const counts = filteredData
+      .filter(r => !r.failed)
+      .map(r => ({
+        ticker: r.ticker,
+        count: RS_COLS.filter(c => (rankMap[r.ticker]?.[c] ?? -1) >= 90).length
+      }))
+      .filter(r => r.count > 0)
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
+
+    const section = document.getElementById('topTenSection');
+    const chart   = document.getElementById('topTenChart');
+    chart.innerHTML = '';
+    if (!counts.length) { section.style.display = 'none'; return; }
+    section.style.display = 'block';
+
+    for (const { ticker, count } of counts) {
+      const widthPct = (count / RS_COLS.length * 100).toFixed(1);
+      const row = document.createElement('div');
+      row.className = 'bar-row';
+      row.innerHTML = `
+        <div class="bar-label">${ticker}</div>
+        <div class="bar-track">
+          <div class="bar-fill" style="width:${widthPct}%"></div>
+          <span class="bar-count">${count} / ${RS_COLS.length}</span>
+        </div>`;
+      chart.appendChild(row);
+    }
+  }
+
+  function renderBotTenChart(rankMap) {
+    const counts = filteredData
+      .filter(r => !r.failed)
+      .map(r => ({
+        ticker: r.ticker,
+        count: RS_COLS.filter(c => (rankMap[r.ticker]?.[c] ?? 101) <= 10).length
+      }))
+      .filter(r => r.count > 0)
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 10);
+
+    const section = document.getElementById('botTenSection');
+    const chart   = document.getElementById('botTenChart');
+    chart.innerHTML = '';
+    if (!counts.length) { section.style.display = 'none'; return; }
+    section.style.display = 'block';
+
+    for (const { ticker, count } of counts) {
+      const widthPct = (count / RS_COLS.length * 100).toFixed(1);
+      const row = document.createElement('div');
+      row.className = 'bar-row';
+      row.innerHTML = `
+        <div class="bar-label">${ticker}</div>
+        <div class="bar-track">
+          <div class="bar-fill worst" style="width:${widthPct}%"></div>
+          <span class="bar-count">${count} / ${RS_COLS.length}</span>
+        </div>`;
+      chart.appendChild(row);
+    }
+  }
+
+  // ── Momentum Regression ───────────────────────────────────────────────────
+
+  const X_MAP  = { h1: 0.125, d1: 1, w1: 2.5, w3: 10, w5: 20, w7: 30, w9: 40, w11: 50, w13: 60 };
+  const W_MAP  = { h1: 9, d1: 8, w1: 7, w3: 6, w5: 5, w7: 4, w9: 3, w11: 2, w13: 1 };
+  const R2_MIN = 0.25;
+
+  function weightedLinReg(rankMap, ticker) {
+    const pts = RS_COLS
+      .map(c => ({ x: X_MAP[c], y: rankMap[ticker]?.[c], w: W_MAP[c] }))
+      .filter(p => p.y != null);
+    if (pts.length < 3) return null;
+
+    const W   = pts.reduce((s, p) => s + p.w, 0);
+    const Wx  = pts.reduce((s, p) => s + p.w * p.x, 0);
+    const Wy  = pts.reduce((s, p) => s + p.w * p.y, 0);
+    const Wx2 = pts.reduce((s, p) => s + p.w * p.x * p.x, 0);
+    const Wxy = pts.reduce((s, p) => s + p.w * p.x * p.y, 0);
+
+    const denom = W * Wx2 - Wx * Wx;
+    if (Math.abs(denom) < 1e-10) return null;
+
+    const slope = (W * Wxy - Wx * Wy) / denom;
+    const b     = (Wy - slope * Wx) / W;
+    const yBar  = Wy / W;
+    const ssTot = pts.reduce((s, p) => s + p.w * (p.y - yBar) ** 2, 0);
+    const ssRes = pts.reduce((s, p) => s + p.w * (p.y - (b + slope * p.x)) ** 2, 0);
+    const r2    = ssTot < 1e-10 ? 0 : Math.max(0, 1 - ssRes / ssTot);
+
+    return { slope, r2 };
+  }
+
+  function renderMomentumChart(rankMap) {
+    const all = filteredData
+      .filter(r => !r.failed)
+      .map(r => {
+        const reg = weightedLinReg(rankMap, r.ticker);
+        if (!reg || reg.r2 < R2_MIN) return null;
+        return { ticker: r.ticker, momentum: -reg.slope, r2: reg.r2 };
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.momentum - a.momentum);
+
+    const section = document.getElementById('momentumSection');
+    if (all.length === 0) { section.style.display = 'none'; return; }
+    section.style.display = 'block';
+
+    const top5   = all.slice(0, 5);
+    const bot5   = all.slice(-5).reverse();
+    const maxAbs = Math.max(...[...top5, ...bot5].map(r => Math.abs(r.momentum)), 1);
+
+    function fillChart(items, chartId, fillClass) {
+      const el = document.getElementById(chartId);
+      el.innerHTML = '';
+      for (const { ticker, momentum, r2 } of items) {
+        const widthPct = (Math.abs(momentum) / maxAbs * 100).toFixed(1);
+        const sign     = momentum >= 0 ? '+' : '';
+        const row      = document.createElement('div');
+        row.className  = 'bar-row';
+        row.innerHTML  = `
+          <div class="bar-label">${ticker}</div>
+          <div class="bar-track">
+            <div class="bar-fill ${fillClass}" style="width:${widthPct}%"></div>
+          </div>
+          <div class="bar-meta">${sign}${momentum.toFixed(1)} · R²=${r2.toFixed(2)}</div>`;
+        el.appendChild(row);
+      }
+    }
+
+    fillChart(top5, 'momentumTopChart', 'improve');
+    fillChart(bot5, 'momentumBotChart', 'worst');
+  }
+
+  // ── Z-Score Velocity ──────────────────────────────────────────────────────
+
+  function computeZScoreMap() {
+    const zMap = {};
+    for (const col of RS_COLS) {
+      const vals = filteredData
+        .filter(r => !r.failed && r[col] != null)
+        .map(r => ({ ticker: r.ticker, v: r[col] }));
+      if (vals.length < 2) continue;
+      const mean = vals.reduce((s, x) => s + x.v, 0) / vals.length;
+      const std  = Math.sqrt(vals.reduce((s, x) => s + (x.v - mean) ** 2, 0) / vals.length);
+      if (std < 1e-10) continue;
+      for (const { ticker, v } of vals) {
+        if (!zMap[ticker]) zMap[ticker] = {};
+        zMap[ticker][col] = (v - mean) / std;
+      }
+    }
+    return zMap;
+  }
+
+  function zVelocityReg(zMap, ticker) {
+    const pts = RS_COLS
+      .map(c => ({ x: Math.log(X_MAP[c]), y: zMap[ticker]?.[c] }))
+      .filter(p => p.y != null);
+    if (pts.length < 3) return null;
+
+    const n   = pts.length;
+    const Sx  = pts.reduce((s, p) => s + p.x, 0);
+    const Sy  = pts.reduce((s, p) => s + p.y, 0);
+    const Sx2 = pts.reduce((s, p) => s + p.x * p.x, 0);
+    const Sxy = pts.reduce((s, p) => s + p.x * p.y, 0);
+
+    const denom = n * Sx2 - Sx * Sx;
+    if (Math.abs(denom) < 1e-10) return null;
+
+    const slope = (n * Sxy - Sx * Sy) / denom;
+    const b     = (Sy - slope * Sx) / n;
+    const yBar  = Sy / n;
+    const ssTot = pts.reduce((s, p) => s + (p.y - yBar) ** 2, 0);
+    const ssRes = pts.reduce((s, p) => s + (p.y - (b + slope * p.x)) ** 2, 0);
+    const r2    = ssTot < 1e-10 ? 0 : Math.max(0, 1 - ssRes / ssTot);
+
+    return { slope, r2 };
+  }
+
+  function renderVelocityChart() {
+    const zMap = computeZScoreMap();
+    const all  = filteredData
+      .filter(r => !r.failed)
+      .map(r => {
+        const reg = zVelocityReg(zMap, r.ticker);
+        if (!reg || reg.r2 < R2_MIN) return null;
+        return { ticker: r.ticker, velocity: -reg.slope, r2: reg.r2 };
+      })
+      .filter(Boolean)
+      .sort((a, b) => b.velocity - a.velocity);
+
+    const section = document.getElementById('velocitySection');
+    if (all.length === 0) { section.style.display = 'none'; return; }
+    section.style.display = 'block';
+
+    const top5   = all.slice(0, 5);
+    const bot5   = all.slice(-5).reverse();
+    const maxAbs = Math.max(...[...top5, ...bot5].map(r => Math.abs(r.velocity)), 1);
+
+    function fillVChart(items, chartId, fillClass) {
+      const el = document.getElementById(chartId);
+      el.innerHTML = '';
+      for (const { ticker, velocity, r2 } of items) {
+        const widthPct = (Math.abs(velocity) / maxAbs * 100).toFixed(1);
+        const sign     = velocity >= 0 ? '+' : '';
+        const row      = document.createElement('div');
+        row.className  = 'bar-row';
+        row.innerHTML  = `
+          <div class="bar-label">${ticker}</div>
+          <div class="bar-track">
+            <div class="bar-fill ${fillClass}" style="width:${widthPct}%"></div>
+          </div>
+          <div class="bar-meta">${sign}${velocity.toFixed(2)}σ · R²=${r2.toFixed(2)}</div>`;
+        el.appendChild(row);
+      }
+    }
+
+    fillVChart(top5, 'velocityTopChart', 'improve');
+    fillVChart(bot5, 'velocityBotChart', 'worst');
+  }
+
+  // ── Market Breadth & Diffusion ────────────────────────────────────────────
+
+  function renderBreadthTable() {
+    const section = document.getElementById('breadthSection');
+    if (!section) return;
+    const valid = filteredData.filter(r => !r.failed);
+    const n = valid.length;
+    if (n === 0) { section.style.display = 'none'; return; }
+
+    const frac = fn => valid.filter(fn).length / n * 100;
+    const pOb   = frac(r => r.rsi14  != null && r.rsi14  > 70);
+    const pOs   = frac(r => r.rsi14  != null && r.rsi14  < 30);
+    const pEma9 = frac(r => r.ema9   != null && r.ema9   > 0);
+    const p20   = frac(r => r.sma20  != null && r.sma20  > 0);
+    const p50   = frac(r => r.sma50  != null && r.sma50  > 0);
+    const p150  = frac(r => r.sma150 != null && r.sma150 > 0);
+    const p200  = frac(r => r.sma200 != null && r.sma200 > 0);
+    const spread = p50 - p200;
+    const pRs   = frac(r => r.w1 != null && r.w1 > 0);
+
+    function pctBar(v) {
+      const w = Math.min(Math.max(v, 0), 100).toFixed(1);
+      const c = v > 60 ? '#3fb950' : v > 40 ? '#e3b341' : '#f85149';
+      return `<div class="bdiff-bar-track"><div class="bdiff-bar-fill" style="width:${w}%;background:${c}"></div></div>`;
+    }
+    function spreadBar(v) {
+      const half = (Math.min(Math.abs(v), 100) / 2).toFixed(1);
+      const c    = v >= 0 ? '#3fb950' : '#f85149';
+      const ctr  = 'position:absolute;left:50%;width:1px;height:100%;background:#484f58;transform:translateX(-50%)';
+      const fill = v >= 0
+        ? `position:absolute;left:50%;width:${half}%;height:100%;background:${c};border-radius:0 2px 2px 0`
+        : `position:absolute;right:50%;width:${half}%;height:100%;background:${c};border-radius:2px 0 0 2px`;
+      return `<div class="bdiff-bar-track"><div style="${fill}"></div><div style="${ctr}"></div></div>`;
+    }
+    function sig(v, tiers) {
+      for (const [thresh, label, cls] of tiers) if (v >= thresh) return [label, cls];
+      return tiers[tiers.length - 1].slice(1);
+    }
+
+    const rows = [
+      { label: 'RSI Overbought (>70)',         val: pOb,    bar: pctBar(pOb),
+        signal: sig(pOb,  [[60,'Frothy','sig-red'],[35,'Heated','sig-orange'],[15,'Moderate','sig-yellow'],[0,'Cooling','sig-green']]),
+        desc: 'Stocks in overbought territory — high readings signal extended, crowded trades' },
+      { label: 'RSI Oversold (<30)',            val: pOs,    bar: pctBar(pOs),
+        signal: sig(pOs,  [[25,'Stressed','sig-red'],[12,'Elevated','sig-orange'],[0,'Stable','sig-green']]),
+        desc: 'Stocks washed out — rising % signals broad panic or capitulation' },
+      { label: '% Above 9 EMA',               val: pEma9,  bar: pctBar(pEma9),
+        signal: sig(pEma9, [[70,'Strong','sig-green'],[50,'Bullish','sig-green'],[30,'Mixed','sig-yellow'],[0,'Weak','sig-red']]),
+        desc: 'Fastest momentum filter — majority above 9 EMA = near-term trend alignment intact' },
+      { label: '% Above 20D SMA',              val: p20,    bar: pctBar(p20),
+        signal: sig(p20,  [[70,'Strong','sig-green'],[50,'Bullish','sig-green'],[30,'Mixed','sig-yellow'],[0,'Weak','sig-red']]),
+        desc: 'High-frequency pulse — measures short-term heat and mean-reversion potential' },
+      { label: '% Above 50D SMA',              val: p50,    bar: pctBar(p50),
+        signal: sig(p50,  [[70,'Strong','sig-green'],[50,'Bullish','sig-green'],[30,'Mixed','sig-yellow'],[0,'Weak','sig-red']]),
+        desc: 'Core trend barometer — majority above = intermediate uptrend intact' },
+      { label: '% Above 150D SMA',             val: p150,   bar: pctBar(p150),
+        signal: sig(p150, [[70,'Strong','sig-green'],[50,'Bullish','sig-green'],[30,'Mixed','sig-yellow'],[0,'Weak','sig-red']]),
+        desc: 'Intermediate Bridge — confirms Trend Template environment (Minervini)' },
+      { label: '% Above 200D SMA',             val: p200,   bar: pctBar(p200),
+        signal: sig(p200, [[70,'Strong','sig-green'],[50,'Bullish','sig-green'],[30,'Mixed','sig-yellow'],[0,'Weak','sig-red']]),
+        desc: 'Long-term structural health — most reliable breadth anchor' },
+      { label: 'MA Conv. Spread (50D \u2212 200D)', val: spread, bar: spreadBar(spread), signed: true,
+        signal: sig(spread, [[20,'Expanding','sig-green'],[0,'Stable','sig-green'],[-20,'Compressing','sig-orange'],[-100,'Cliff \u26a0','sig-red']]),
+        desc: '50D diffusion minus 200D — compression toward zero signals hidden momentum deterioration' },
+      { label: '1W RS Leaders',                val: pRs,    bar: pctBar(pRs),
+        signal: sig(pRs,  [[60,'Broad Rally','sig-green'],[40,'Neutral','sig-yellow'],[0,'Narrow','sig-red']]),
+        desc: '% outperforming benchmark this week — breadth of short-term leadership' },
+    ];
+
+    const tbody = document.getElementById('breadthBody');
+    tbody.innerHTML = '';
+    for (const { label, val, bar, signal, desc, signed } of rows) {
+      const [sigText, sigClass] = signal;
+      const valStr = (signed && val >= 0 ? '+' : '') + val.toFixed(1) + '%';
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td class="bdiff-label">${label}</td>
+        <td class="bdiff-val">${valStr}</td>
+        <td class="bdiff-bar-cell">${bar}</td>
+        <td class="bdiff-signal ${sigClass}">${sigText}</td>
+        <td class="bdiff-desc">${desc}</td>`;
+      tbody.appendChild(tr);
+    }
+    section.style.display = 'block';
+    renderEma9Oscillator();
+    renderSma20Oscillator();
+    renderMcClellanOscillator();
+  }
+
+  // ── Breadth Oscillators ───────────────────────────────────────────────────
+
+  function renderBreadthOscillator(seriesKey, sectionId, canvasId) {
+    const LOOKBACK = 252; // ~1 year of trading days
+    const section  = document.getElementById(sectionId);
+    if (!section) return;
+    const rows = filteredData.filter(r => !r.failed && r[seriesKey]);
+    if (!rows.length) { section.style.display = 'none'; return; }
+
+    const series = [];
+    for (let d = LOOKBACK - 1; d >= 0; d--) {
+      let above = 0, total = 0;
+      for (const row of rows) {
+        const ser = row[seriesKey], idx = ser.length - 1 - d;
+        if (idx >= 0 && ser[idx] != null) { total++; if (ser[idx]) above++; }
+      }
+      series.push(total > 0 ? above / total * 100 : null);
+    }
+
+    const dates = [], cur = new Date();
+    for (let count = 0; count < LOOKBACK; ) {
+      cur.setDate(cur.getDate() - 1);
+      if (cur.getDay() !== 0 && cur.getDay() !== 6) { dates.unshift(new Date(cur)); count++; }
+    }
+
+    section.style.display = 'block';
+    const canvas = document.getElementById(canvasId);
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width, H = canvas.height;
+    const PL = 44, PR = 20, PT = 20, PB = 36;
+    const cW = W - PL - PR, cH = H - PT - PB;
+    const px = i => PL + (i / (LOOKBACK - 1)) * cW;
+    const py = v => H - PB - (v / 100) * cH;
+
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0d1117'; ctx.fillRect(0, 0, W, H);
+
+    ctx.fillStyle = 'rgba(63,185,80,0.05)';
+    ctx.fillRect(PL, py(80), cW, py(60) - py(80));
+    ctx.fillStyle = 'rgba(248,81,73,0.05)';
+    ctx.fillRect(PL, py(40), cW, py(20) - py(40));
+
+    ctx.setLineDash([3, 5]);
+    for (const [ref, col] of [[80,'#3fb95055'],[60,'#21262d'],[50,'#484f58'],[40,'#21262d'],[20,'#f8514955']]) {
+      ctx.strokeStyle = col; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(PL, py(ref)); ctx.lineTo(W - PR, py(ref)); ctx.stroke();
+    }
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = '#484f58'; ctx.font = '10px system-ui,sans-serif';
+    ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    for (const ref of [20, 40, 50, 60, 80]) ctx.fillText(ref + '%', PL - 5, py(ref));
+
+    const pts = series.map((v, i) => v != null ? { i, v } : null).filter(Boolean);
+    if (pts.length < 2) { section.style.display = 'none'; return; }
+
+    const last  = pts[pts.length - 1];
+    const color = last.v > 60 ? '#3fb950' : last.v < 40 ? '#f85149' : '#e3b341';
+    const areaC = last.v > 60 ? 'rgba(63,185,80,0.18)' : last.v < 40 ? 'rgba(248,81,73,0.18)' : 'rgba(227,179,65,0.13)';
+
+    ctx.beginPath();
+    ctx.moveTo(px(pts[0].i), H - PB);
+    for (const { i, v } of pts) ctx.lineTo(px(i), py(v));
+    ctx.lineTo(px(last.i), H - PB);
+    ctx.closePath();
+    ctx.fillStyle = areaC; ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(px(pts[0].i), py(pts[0].v));
+    for (const { i, v } of pts.slice(1)) ctx.lineTo(px(i), py(v));
+    ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.stroke();
+
+    ctx.beginPath(); ctx.arc(px(last.i), py(last.v), 4, 0, Math.PI * 2);
+    ctx.fillStyle = color; ctx.fill();
+    ctx.fillStyle = color; ctx.font = '700 11px system-ui,sans-serif';
+    ctx.textAlign = last.v > 60 ? 'right' : 'left'; ctx.textBaseline = 'middle';
+    ctx.fillText(last.v.toFixed(0) + '%', last.v > 60 ? px(last.i) - 8 : px(last.i) + 8, py(last.v));
+
+    ctx.fillStyle = '#484f58'; ctx.font = '10px system-ui,sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    const step = Math.ceil(LOOKBACK / 25); // ~25 labels across
+    for (let i = 0; i < LOOKBACK; i += step)
+      if (dates[i]) ctx.fillText(dates[i].toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), px(i), H - PB + 5);
+    ctx.textAlign = 'right';
+    if (dates[LOOKBACK - 1]) ctx.fillText(dates[LOOKBACK - 1].toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), px(LOOKBACK - 1), H - PB + 5);
+  }
+
+  function renderEma9Oscillator()  { renderBreadthOscillator('ema9AboveSeries',  'ema9OscSection',  'ema9OscCanvas');  }
+  function renderSma20Oscillator() { renderBreadthOscillator('sma20AboveSeries', 'sma20OscSection', 'sma20OscCanvas'); }
+
+  function renderMcClellanOscillator() {
+    const LOOKBACK = parseInt(document.getElementById('mcclellanBarSelect')?.value || '200', 10);
+    const section = document.getElementById('mcclellanOscSection');
+    if (!section) return;
+    const rows = filteredData.filter(r => !r.failed && r._daily && r._daily.length >= LOOKBACK + 1);
+    if (!rows.length) { section.style.display = 'none'; return; }
+
+    // Build net A-D series: daily advances - declines (price up vs price down)
+    const netAD = [];
+    for (let d = LOOKBACK - 1; d >= 0; d--) {
+      let adv = 0, dec = 0;
+      for (const row of rows) {
+        const p = row._daily, i = p.length - 1 - d;
+        if (i >= 1 && p[i] != null && p[i - 1] != null) {
+          if (p[i] > p[i - 1]) adv++;
+          else if (p[i] < p[i - 1]) dec++;
+        }
+      }
+      netAD.push(adv + dec > 0 ? adv - dec : null);
+    }
+
+    // EMA helper
+    const emaOfSeries = (arr, n) => {
+      const k = 2 / (n + 1); let ema = null;
+      return arr.map(v => {
+        if (v === null) return null;
+        ema = ema === null ? v : v * k + ema * (1 - k);
+        return ema;
+      });
+    };
+
+    const fast = emaOfSeries(netAD, 19);
+    const slow = emaOfSeries(netAD, 39);
+    const mcl  = fast.map((v, i) => v !== null && slow[i] !== null ? v - slow[i] : null);
+
+    const dates = [], cur = new Date();
+    for (let count = 0; count < LOOKBACK; ) {
+      cur.setDate(cur.getDate() - 1);
+      if (cur.getDay() !== 0 && cur.getDay() !== 6) { dates.unshift(new Date(cur)); count++; }
+    }
+
+    section.style.display = 'block';
+    const canvas = document.getElementById('mcclellanOscCanvas');
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width, H = canvas.height;
+    const PL = 44, PR = 20, PT = 16, PB = 36;
+    const cW = W - PL - PR, cH = H - PT - PB;
+    const px = i => PL + (i / (LOOKBACK - 1)) * cW;
+
+    const valid = mcl.filter(v => v !== null);
+    if (valid.length < 2) { section.style.display = 'none'; return; }
+    const absMax = Math.max(Math.abs(Math.min(...valid)), Math.abs(Math.max(...valid))) * 1.15 || 10;
+    const py = v => H - PB - ((v + absMax) / (2 * absMax)) * cH;
+    const py0 = py(0);
+
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0d1117'; ctx.fillRect(0, 0, W, H);
+
+    // Reference bands and lines
+    const refs = [absMax * 0.5, 0, -absMax * 0.5];
+    ctx.setLineDash([3, 5]);
+    ctx.font = '10px system-ui,sans-serif'; ctx.textBaseline = 'middle'; ctx.textAlign = 'right';
+    for (const ref of refs) {
+      ctx.strokeStyle = ref === 0 ? '#484f58' : '#21262d';
+      ctx.lineWidth = ref === 0 ? 1.5 : 1;
+      ctx.beginPath(); ctx.moveTo(PL, py(ref)); ctx.lineTo(W - PR, py(ref)); ctx.stroke();
+      ctx.fillStyle = '#484f58';
+      ctx.fillText(Math.round(ref), PL - 5, py(ref));
+    }
+    ctx.setLineDash([]);
+
+    // Bar chart
+    const barW = Math.max(1, cW / LOOKBACK - 0.5);
+    for (let i = 0; i < LOOKBACK; i++) {
+      const v = mcl[i];
+      if (v === null) continue;
+      const x = px(i) - barW / 2;
+      const top = v >= 0 ? py(v) : py0;
+      const bot = v >= 0 ? py0  : py(v);
+      ctx.fillStyle = v >= 0 ? 'rgba(63,185,80,0.75)' : 'rgba(248,81,73,0.75)';
+      ctx.fillRect(x, top, barW, Math.max(1, bot - top));
+    }
+
+    // Current value label
+    const lastVal = valid[valid.length - 1];
+    const lastIdx = mcl.lastIndexOf(lastVal);
+    const labelColor = lastVal >= 0 ? '#3fb950' : '#f85149';
+    ctx.fillStyle = labelColor; ctx.font = '700 11px system-ui,sans-serif';
+    ctx.textAlign = lastVal >= 0 ? 'right' : 'left'; ctx.textBaseline = 'middle';
+    ctx.fillText(lastVal.toFixed(1), lastVal >= 0 ? px(lastIdx) - 6 : px(lastIdx) + 6, py(lastVal) - 8);
+
+    // X-axis dates
+    ctx.fillStyle = '#484f58'; ctx.font = '10px system-ui,sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    const step = Math.ceil(LOOKBACK / 25);
+    for (let i = 0; i < LOOKBACK; i += step)
+      if (dates[i]) ctx.fillText(dates[i].toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), px(i), H - PB + 5);
+    ctx.textAlign = 'right';
+    if (dates[LOOKBACK - 1]) ctx.fillText(dates[LOOKBACK - 1].toLocaleDateString('en-US', { month: 'short', day: 'numeric' }), px(LOOKBACK - 1), H - PB + 5);
+  }
+
+  // ── Render ────────────────────────────────────────────────────────────────
+
+  function colRange(key) {
+    const vals = filteredData.map(r => r[key]).filter(v => v != null);
+    if (!vals.length) return { min: 0, max: 1 };
+    return { min: Math.min(...vals), max: Math.max(...vals) };
+  }
+
+  function heatBg(val, min, max) {
+    if (val == null) return '';
+    if (val >= 0) {
+      const t = Math.min(val / (max || 1), 1);
+      return `rgba(63,185,80,${(0.06 + t*0.34).toFixed(2)})`;
+    } else {
+      const t = Math.min(Math.abs(val) / (Math.abs(min) || 1), 1);
+      return `rgba(248,81,73,${(0.06 + t*0.34).toFixed(2)})`;
+    }
+  }
+
+  function fmt(val) {
+    if (val == null) return '—';
+    return (val >= 0 ? '+' : '') + val.toFixed(2) + '%';
+  }
+
+  function renderTable() {
+    const ranges = {};
+    for (const k of VALUE_COLS) ranges[k] = colRange(k);
+
+    const sorted = [...filteredData].sort((a, b) => {
+      if (a.failed && !b.failed) return 1;
+      if (!a.failed && b.failed) return -1;
+      if (sortCol === 'ticker') return sortDir * a.ticker.localeCompare(b.ticker);
+      return sortDir * ((a[sortCol] ?? -Infinity) - (b[sortCol] ?? -Infinity));
+    });
+
+    const tbody = document.getElementById('tableBody');
+    tbody.innerHTML = '';
+
+    for (const row of sorted) {
+      const tr = document.createElement('tr');
+      if (row.ticker === 'SPY') tr.classList.add('spy-row');
+      if (row.failed)           tr.classList.add('failed');
+
+      const tdT  = document.createElement('td');
+      const sym  = document.createElement('span');
+      sym.className   = 'ticker-sym';
+      sym.textContent = row.ticker;
+      tdT.appendChild(sym);
+      const ind = INDUSTRY_MAP[row.ticker];
+      if (ind) {
+        const indEl = document.createElement('span');
+        indEl.className   = 'ticker-ind';
+        indEl.textContent = ind;
+        tdT.appendChild(indEl);
+      }
+      if (!row.failed && row._daily) { tdT.classList.add('ticker-link'); tdT.addEventListener('click', () => openRSChart(row)); }
+      tr.appendChild(tdT);
+
+      for (const col of VALUE_COLS) {
+        const td  = document.createElement('td');
+        const val = row[col];
+        const sep = SEP_COLS.has(col);
+
+        if (val == null) {
+          td.textContent = '—';
+          td.className = (sep ? 'sep-l ' : '') + 'na';
+        } else if (col === 'rsi14') {
+          td.textContent = val.toFixed(1);
+          const cls = val > 55 ? 'pos' : val < 45 ? 'neg' : 'zero';
+          td.className = (sep ? 'sep-l ' : '') + cls;
+          if (!row.failed) td.style.backgroundColor = heatBg(val - 50, -50, 50);
+        } else {
+          td.textContent = fmt(val);
+          const cls = val > 0.005 ? 'pos' : val < -0.005 ? 'neg' : 'zero';
+          td.className = (sep ? 'sep-l ' : '') + cls;
+          if (!row.failed) td.style.backgroundColor = heatBg(val, ranges[col].min, ranges[col].max);
+        }
+        tr.appendChild(td);
+      }
+
+      tbody.appendChild(tr);
+    }
+
+    updateSortArrows();
+    renderPercentileTable(sorted);
+  }
+
+  // ── RS Chart Modal ────────────────────────────────────────────────────────
+
+  function openRSChart(row) {
+    const DAYS = 65; // ~13 weeks of history
+    const td = row._daily, bd = _benchDailyRef ? _benchDailyRef.slice(-80) : null;
+    if (!td || !bd) return;
+    const len = Math.min(td.length, bd.length, DAYS + 1);
+    if (len < 2) return;
+    const t = td.slice(-len), b = bd.slice(-len);
+    const t0 = t[0], b0 = b[0];
+    const rsLine = t.map((v, i) => (v / t0 - 1) * 100 - (b[i] / b0 - 1) * 100);
+
+    document.getElementById('rsChartTitle').textContent = row.ticker + ' vs Benchmark — 13W Relative Return';
+    document.getElementById('rsChartOverlay').style.display = 'flex';
+
+    const canvas = document.getElementById('rsChartCanvas');
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width, H = canvas.height;
+    const PL = 52, PR = 20, PT = 20, PB = 36;
+    const cW = W - PL - PR, cH = H - PT - PB;
+    const N = rsLine.length;
+    const minV = Math.min(...rsLine, 0), maxV = Math.max(...rsLine, 0);
+    const pad  = Math.max((maxV - minV) * 0.12, 0.5);
+    const yMin = minV - pad, yMax = maxV + pad;
+    const px = i => PL + (i / (N - 1)) * cW;
+    const py = v => H - PB - ((v - yMin) / (yMax - yMin)) * cH;
+
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0d1117'; ctx.fillRect(0, 0, W, H);
+
+    ctx.setLineDash([3, 5]);
+    const steps = 6;
+    ctx.font = '10px system-ui,sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+    for (let s = 0; s <= steps; s++) {
+      const v = yMin + (yMax - yMin) * s / steps;
+      ctx.strokeStyle = Math.abs(v) < (yMax - yMin) * 0.05 ? '#484f58' : '#21262d';
+      ctx.lineWidth = Math.abs(v) < (yMax - yMin) * 0.05 ? 1.5 : 1;
+      ctx.beginPath(); ctx.moveTo(PL, py(v)); ctx.lineTo(W - PR, py(v)); ctx.stroke();
+      ctx.fillStyle = '#6e7681'; ctx.fillText((v >= 0 ? '+' : '') + v.toFixed(1) + '%', PL - 5, py(v));
+    }
+    ctx.setLineDash([]);
+
+    const lastV = rsLine[N - 1];
+    const color = lastV >= 0 ? '#3fb950' : '#f85149';
+
+    ctx.beginPath();
+    ctx.moveTo(px(0), py(0));
+    for (let i = 0; i < N; i++) ctx.lineTo(px(i), py(rsLine[i]));
+    ctx.lineTo(px(N - 1), py(0));
+    ctx.closePath();
+    ctx.fillStyle = lastV >= 0 ? 'rgba(63,185,80,0.15)' : 'rgba(248,81,73,0.15)';
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(px(0), py(rsLine[0]));
+    for (let i = 1; i < N; i++) ctx.lineTo(px(i), py(rsLine[i]));
+    ctx.strokeStyle = color; ctx.lineWidth = 2; ctx.stroke();
+
+    ctx.beginPath(); ctx.arc(px(N - 1), py(lastV), 4, 0, Math.PI * 2);
+    ctx.fillStyle = color; ctx.fill();
+    ctx.fillStyle = color; ctx.font = '700 11px system-ui,sans-serif';
+    ctx.textAlign = lastV >= 0 ? 'left' : 'right'; ctx.textBaseline = 'middle';
+    ctx.fillText((lastV >= 0 ? '+' : '') + lastV.toFixed(2) + '%', lastV >= 0 ? px(N-1)+8 : px(N-1)-8, py(lastV));
+
+    ctx.fillStyle = '#484f58'; ctx.font = '10px system-ui,sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+    const totalWeeks = Math.round(N / 5);
+    for (let w = 0; w <= totalWeeks; w++) {
+      const i = Math.round(w * (N - 1) / totalWeeks);
+      const weeksAgo = totalWeeks - w;
+      ctx.fillText(weeksAgo === 0 ? 'Now' : weeksAgo + 'w', px(i), H - PB + 5);
+    }
+  }
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') {
+      document.getElementById('rsChartOverlay').style.display = 'none';
+      document.getElementById('zsView').style.display = 'none';
+    }
+  });
+
+  // ── Z-Score Chart View ────────────────────────────────────────────────────
+
+  function computeZScoreRS(tickerSeries, benchSeries, chartBars, lookback) {
+    const needed = chartBars + 1;
+    if (!tickerSeries || !benchSeries || tickerSeries.length < needed || benchSeries.length < needed) return null;
+    const t = tickerSeries.slice(-needed), b = benchSeries.slice(-needed);
+    let cum = 0;
+    const cumRS = [];
+    for (let i = 1; i < needed; i++) {
+      cum += ((t[i] / t[i-1] - 1) - (b[i] / b[i-1] - 1)) * 100;
+      cumRS.push(cum);
+    }
+    // Rolling z-score: each point normalized over its own trailing `lookback` window
+    return cumRS.map((v, i) => {
+      const win = cumRS.slice(Math.max(0, i - lookback + 1), i + 1);
+      if (win.length < 2) return 0;
+      const mean = win.reduce((s, x) => s + x, 0) / win.length;
+      const std  = Math.sqrt(win.reduce((s, x) => s + (x - mean) ** 2, 0) / win.length);
+      return std < 1e-10 ? 0 : (v - mean) / std;
+    });
+  }
+
+  function buildZXLabels(N, mode) {
+    const labels = [];
+    const add = (i, label, align) => labels.push({ i, label, align: align || 'center' });
+    if (mode === 'd') {
+      // 126 daily bars ≈ 6 months, label every 21 bars (≈1 month)
+      for (let i = 0; i < N - 1; i += 21) { const mo = Math.round((N-1-i)/21); add(i, mo ? mo+'mo' : 'Now'); }
+    } else if (mode === 'h') {
+      // 80 hourly bars ≈ 11 trading days, label every 7 bars (≈1 day)
+      for (let i = 0; i < N - 1; i += 7) { const d = Math.round((N-1-i)/7); add(i, d ? d+'d' : 'Now'); }
+    }
+    add(N - 1, 'Now', 'right');
+    return labels;
+  }
+
+  function computeRawRS(tickerSeries, benchSeries, chartBars) {
+    const needed = chartBars + 1;
+    if (!tickerSeries || !benchSeries || tickerSeries.length < needed || benchSeries.length < needed) return null;
+    const t = tickerSeries.slice(-needed), b = benchSeries.slice(-needed);
+    let cum = 0;
+    const cumRS = [];
+    for (let i = 1; i < needed; i++) {
+      cum += ((t[i] / t[i-1] - 1) - (b[i] / b[i-1] - 1)) * 100;
+      cumRS.push(cum);
+    }
+    return cumRS;
+  }
+
+  function drawRawRSChart(canvas, rs, xLabels) {
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width, H = canvas.height;
+    const PL = 44, PR = 12, PT = 10, PB = 22;
+    const cW = W - PL - PR, cH = H - PT - PB;
+    const N = rs.length;
+    const absMax = Math.max(Math.abs(Math.min(...rs)), Math.abs(Math.max(...rs))) * 1.1 || 1;
+    const yMin = -absMax, yMax = absMax;
+    const px = i => PL + (i / (N - 1)) * cW;
+    const py = v => H - PB - ((v - yMin) / (yMax - yMin)) * cH;
+
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0d1117'; ctx.fillRect(0, 0, W, H);
+
+    // Zero line
+    ctx.setLineDash([3, 5]);
+    ctx.strokeStyle = '#484f58'; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(PL, py(0)); ctx.lineTo(W - PR, py(0)); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Y-axis labels
+    ctx.font = '9px system-ui,sans-serif'; ctx.textBaseline = 'middle'; ctx.textAlign = 'right';
+    ctx.fillStyle = '#484f58';
+    ctx.fillText('0%', PL - 3, py(0));
+    const step = absMax > 20 ? 10 : absMax > 10 ? 5 : absMax > 4 ? 2 : 1;
+    for (let v = step; v < absMax * 0.9; v += step) {
+      ctx.fillText('+' + v + '%', PL - 3, py(v));
+      ctx.fillText('-' + v + '%', PL - 3, py(-v));
+    }
+
+    const lastRS = rs[N - 1];
+    // Fill
+    ctx.beginPath();
+    ctx.moveTo(px(0), py(0));
+    for (let i = 0; i < N; i++) ctx.lineTo(px(i), py(rs[i]));
+    ctx.lineTo(px(N - 1), py(0));
+    ctx.closePath();
+    ctx.fillStyle = lastRS >= 0 ? 'rgba(63,185,80,0.15)' : 'rgba(248,81,73,0.15)';
+    ctx.fill();
+
+    // Line
+    const color = lastRS >= 0 ? '#3fb950' : '#f85149';
+    ctx.beginPath();
+    ctx.moveTo(px(0), py(rs[0]));
+    for (let i = 1; i < N; i++) ctx.lineTo(px(i), py(rs[i]));
+    ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.stroke();
+
+    // End dot
+    ctx.beginPath(); ctx.arc(px(N - 1), py(lastRS), 3, 0, Math.PI * 2);
+    ctx.fillStyle = color; ctx.fill();
+
+    if (xLabels && xLabels.length) {
+      ctx.fillStyle = '#484f58'; ctx.font = '9px system-ui,sans-serif'; ctx.textBaseline = 'top';
+      for (const { i, label, align } of xLabels) { ctx.textAlign = align || 'center'; ctx.fillText(label, px(i), H - PB + 3); }
+    }
+  }
+
+  function drawZScoreChart(canvas, z, xLabels) {
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width, H = canvas.height;
+    const PL = 36, PR = 12, PT = 10, PB = 22;
+    const cW = W - PL - PR, cH = H - PT - PB;
+    const N = z.length;
+    const yMin = Math.min(Math.min(...z), -2.5) - 0.2;
+    const yMax = Math.max(Math.max(...z),  2.5) + 0.2;
+    const px = i => PL + (i / (N - 1)) * cW;
+    const py = v => H - PB - ((v - yMin) / (yMax - yMin)) * cH;
+
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0d1117'; ctx.fillRect(0, 0, W, H);
+
+    ctx.fillStyle = 'rgba(63,185,80,0.06)';
+    ctx.fillRect(PL, py(2), cW, py(1) - py(2));
+    ctx.fillStyle = 'rgba(248,81,73,0.06)';
+    ctx.fillRect(PL, py(-1), cW, py(-2) - py(-1));
+
+    ctx.setLineDash([3, 5]);
+    ctx.font = '9px system-ui,sans-serif';
+    ctx.textBaseline = 'middle'; ctx.textAlign = 'right';
+    for (const [ref, col] of [[2,'#3fb95050'],[1,'#3fb95030'],[0,'#484f58'],[-1,'#f8514930'],[-2,'#f8514950']]) {
+      ctx.strokeStyle = col; ctx.lineWidth = ref === 0 ? 1.5 : 1;
+      ctx.beginPath(); ctx.moveTo(PL, py(ref)); ctx.lineTo(W - PR, py(ref)); ctx.stroke();
+      ctx.fillStyle = '#484f58';
+      ctx.fillText(ref === 0 ? '0' : ref + 'σ', PL - 3, py(ref));
+    }
+    ctx.setLineDash([]);
+
+    const lastZ = z[N - 1];
+    ctx.beginPath();
+    ctx.moveTo(px(0), py(0));
+    for (let i = 0; i < N; i++) ctx.lineTo(px(i), py(z[i]));
+    ctx.lineTo(px(N - 1), py(0));
+    ctx.closePath();
+    ctx.fillStyle = lastZ >= 0 ? 'rgba(63,185,80,0.15)' : 'rgba(248,81,73,0.15)';
+    ctx.fill();
+
+    const color = lastZ >= 0 ? '#3fb950' : '#f85149';
+    ctx.beginPath();
+    ctx.moveTo(px(0), py(z[0]));
+    for (let i = 1; i < N; i++) ctx.lineTo(px(i), py(z[i]));
+    ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.stroke();
+
+    ctx.beginPath(); ctx.arc(px(N - 1), py(lastZ), 3, 0, Math.PI * 2);
+    ctx.fillStyle = color; ctx.fill();
+
+    if (xLabels && xLabels.length) {
+      ctx.fillStyle = '#484f58'; ctx.font = '9px system-ui,sans-serif'; ctx.textBaseline = 'top';
+      for (const { i, label, align } of xLabels) { ctx.textAlign = align || 'center'; ctx.fillText(label, px(i), H - PB + 3); }
+    }
+  }
+
+  function renderZScoreView() {
+    const sel       = document.getElementById('zsLookbackSelect')?.value  || '200d';
+    const chartType = document.getElementById('zsChartTypeSelect')?.value || 'zscore';
+    const barSel    = parseInt(document.getElementById('zsBarSelect')?.value || '200', 10);
+    const cfgMap = {
+      '200d': { lookback: 200, maxBars: 204, key: '_daily',  bench: () => _benchDailyRef,  mode: 'd', label: '200-Day' },
+      '50d':  { lookback:  50, maxBars: 204, key: '_daily',  bench: () => _benchDailyRef,  mode: 'd', label: '50-Day'  },
+      '20d':  { lookback:  20, maxBars: 204, key: '_daily',  bench: () => _benchDailyRef,  mode: 'd', label: '20-Day'  },
+      '9d':   { lookback:   9, maxBars: 204, key: '_daily',  bench: () => _benchDailyRef,  mode: 'd', label: '9-Day'   },
+      '3d':   { lookback:   3, maxBars: 204, key: '_daily',  bench: () => _benchDailyRef,  mode: 'd', label: '3-Day'   },
+      '1d':   { lookback:   7, maxBars:  79, key: '_hourly', bench: () => _benchHourlyRef, mode: 'h', label: '1-Day (Hourly)' },
+      '1h':   { lookback:  13, maxBars:  79, key: '_hourly', bench: () => _benchHourlyRef, mode: 'h', label: '1-Hour'  },
+    };
+    const cfg = cfgMap[sel];
+    if (!cfg) return;
+    const benchData = cfg.bench();
+    if (!benchData) { alert('No data loaded yet.'); return; }
+    const chartBars = Math.min(barSel, cfg.maxBars);
+    const benchSlice = benchData.slice(-(chartBars + 1));
+    const entries = filteredData
+      .filter(r => !r.failed && r[cfg.key])
+      .map(r => {
+        const data = chartType === 'raw'
+          ? computeRawRS(r[cfg.key], benchSlice, chartBars)
+          : computeZScoreRS(r[cfg.key], benchSlice, chartBars, cfg.lookback);
+        return { ticker: r.ticker, data };
+      })
+      .filter(e => e.data !== null)
+      .sort((a, b) => b.data[b.data.length - 1] - a.data[a.data.length - 1]);
+
+    const typeLabel = chartType === 'raw' ? 'Raw RS (cumulative %)' : `${cfg.label} Z-Score`;
+    document.getElementById('zsViewMeta').textContent =
+      `${typeLabel} · sorted by today's score · ${entries.length} tickers`;
+
+    const grid = document.getElementById('zsViewGrid');
+    grid.innerHTML = '';
+    for (const { ticker, data } of entries) {
+      const lastVal = data[data.length - 1];
+      const scoreText = chartType === 'raw'
+        ? `${lastVal >= 0 ? '+' : ''}${lastVal.toFixed(2)}%`
+        : `${lastVal >= 0 ? '+' : ''}${lastVal.toFixed(2)}σ`;
+      const card = document.createElement('div');
+      card.className = 'zs-card';
+      card.innerHTML = `
+        <div class="zs-card-header">
+          <span class="zs-ticker">${ticker}</span>
+          <span class="zs-score ${lastVal >= 0 ? 'pos' : 'neg'}">${scoreText}</span>
+        </div>
+        <canvas class="zs-canvas" width="760" height="110"></canvas>`;
+      grid.appendChild(card);
+      const xLabels = buildZXLabels(data.length, cfg.mode);
+      if (chartType === 'raw') drawRawRSChart(card.querySelector('canvas'), data, xLabels);
+      else drawZScoreChart(card.querySelector('canvas'), data, xLabels);
+    }
+    document.getElementById('zsView').style.display = 'block';
+  }
+
+  function toggleZSView(e) {
+    e.preventDefault();
+    const view = document.getElementById('zsView');
+    if (view.style.display === 'none' || !view.style.display) renderZScoreView();
+    else view.style.display = 'none';
+  }
+
+  // ── Sort ──────────────────────────────────────────────────────────────────
+
+  function attachSortHandlers() {
+    document.querySelectorAll('#rsTable th.sortable, #pctTable th.sortable').forEach(th => {
+      th.addEventListener('click', () => {
+        const col = th.dataset.col;
+        if (!col) return;
+        if (col === sortCol) { sortDir *= -1; } else { sortCol = col; sortDir = -1; }
+        renderTable();
+      });
+    });
+  }
+
+  function updateSortArrows() {
+    document.querySelectorAll('th[data-col]').forEach(th => {
+      const col = th.dataset.col;
+      const el  = document.getElementById(`arr-${col}`);
+      if (el) el.textContent = col === sortCol ? (sortDir === -1 ? ' ▼' : ' ▲') : '';
+      th.classList.toggle('active', col === sortCol);
+    });
+  }
+
+  // ── Utils ─────────────────────────────────────────────────────────────────
+
+  function sleep(ms)      { return new Promise(r => setTimeout(r, ms)); }
+  function showError(msg) { const e = document.getElementById('status'); e.textContent = msg; e.className = 'error'; }
+
+  loadData();
+</script>
+
+<div id="zsView">
+  <div id="zsViewInner">
+    <div id="zsViewHeader">
+      <div>
+        <div id="zsViewTitle">RS Z-Score Charts</div>
+        <div id="zsViewMeta">200-day cumulative RS · z-scored · sorted by today's score</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <select id="zsChartTypeSelect" onchange="renderZScoreView()">
+          <option value="zscore">Z-Score</option>
+          <option value="raw">Raw RS</option>
+        </select>
+        <select id="zsBarSelect" onchange="renderZScoreView()">
+          <option value="9">9 Bars</option>
+          <option value="20">20 Bars</option>
+          <option value="50">50 Bars</option>
+          <option value="100">100 Bars</option>
+          <option value="150">150 Bars</option>
+          <option value="200" selected>200 Bars</option>
+        </select>
+        <select id="zsLookbackSelect" onchange="renderZScoreView()">
+          <option value="200d">200-Day</option>
+          <option value="50d">50-Day</option>
+          <option value="20d">20-Day</option>
+          <option value="9d">9-Day</option>
+          <option value="3d">3-Day</option>
+          <option value="1d">1-Day (Hourly)</option>
+          <option value="1h">1-Hour</option>
+        </select>
+        <button id="zsViewClose" onclick="document.getElementById('zsView').style.display='none'">×</button>
+      </div>
+    </div>
+    <div id="zsViewGrid"></div>
+  </div>
+</div>
+<div id="rsChartOverlay" style="display:none" onclick="if(event.target===this)this.style.display='none'">
+  <div id="rsChartModal">
+    <div id="rsChartHeader">
+      <span id="rsChartTitle"></span>
+      <button id="rsChartClose" onclick="document.getElementById('rsChartOverlay').style.display='none'">×</button>
+    </div>
+    <canvas id="rsChartCanvas" width="720" height="320"></canvas>
+  </div>
+</div>
+</body>
+</html>
