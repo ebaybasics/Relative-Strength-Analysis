@@ -223,8 +223,10 @@
     .cs-export-btn:hover { color:#58a6ff; border-color:#58a6ff; }
     #csNavLink    { font-size:0.82rem; color:#8b949e; text-decoration:none; border:1px solid #30363d; border-radius:6px; padding:4px 10px; white-space:nowrap; }
     #csNavLink:hover { color:#58a6ff; border-color:#58a6ff; }
-    #csIntervalSelect, #csBarSelect, #csSortSelect { background:#21262d; border:1px solid #30363d; color:#e6edf3; padding:5px 10px; border-radius:6px; font-size:0.82rem; cursor:pointer; }
-    #csIntervalSelect:focus, #csBarSelect:focus, #csSortSelect:focus { outline:none; border-color:#58a6ff; }
+    #csIntervalSelect, #csBarSelect, #csSortSelect, #csTopSelect { background:#21262d; border:1px solid #30363d; color:#e6edf3; padding:5px 10px; border-radius:6px; font-size:0.82rem; cursor:pointer; }
+    #csIntervalSelect:focus, #csBarSelect:focus, #csSortSelect:focus, #csTopSelect:focus { outline:none; border-color:#58a6ff; }
+    #csSortDirBtn { background:#21262d; border:1px solid #30363d; color:#8b949e; border-radius:6px; padding:5px 10px; font-size:0.82rem; cursor:pointer; }
+    #csSortDirBtn:hover { color:#58a6ff; border-color:#58a6ff; }
     .cs-loading { text-align:center; padding:32px; color:#8b949e; }
   </style>
 </head>
@@ -1707,6 +1709,7 @@
   // ── Candlestick Chart View ────────────────────────────────────────────────
 
   const _ohlcCache = {};
+  let _csSortAsc = false;
 
   async function fetchOHLC(ticker, interval, range) {
     const cacheKey = `${ticker}_${interval}_${range}`;
@@ -1733,7 +1736,7 @@
           const c = q.close[i];
           if (c != null) lastC = c;
           if (lastC == null) continue;
-          out.push({ t: ts[i] * 1000, o: q.open[i] ?? lastC, h: q.high[i] ?? lastC, l: q.low[i] ?? lastC, c: lastC });
+          out.push({ t: ts[i] * 1000, o: q.open[i] ?? lastC, h: q.high[i] ?? lastC, l: q.low[i] ?? lastC, c: lastC, v: q.volume[i] ?? 0 });
         }
         if (!out.length) throw new Error('empty');
         _ohlcCache[cacheKey] = out;
@@ -1746,51 +1749,127 @@
     throw lastErr;
   }
 
-  function drawCandlestickChart(canvas, candles) {
+  function _smaLine(candles, period) {
+    const n = candles.length, out = new Array(n).fill(null);
+    if (n < period) return out;
+    let sum = 0;
+    for (let i = 0; i < period; i++) sum += candles[i].c;
+    out[period - 1] = sum / period;
+    for (let i = period; i < n; i++) { sum += candles[i].c - candles[i - period].c; out[i] = sum / period; }
+    return out;
+  }
+
+  function drawCandlestickChart(canvas, candles, allCandles) {
     const ctx = canvas.getContext('2d');
     const W = canvas.width, H = canvas.height;
-    const PL = 56, PR = 12, PT = 8, PB = 22;
-    const cW = W - PL - PR, cH = H - PT - PB;
+    const PL = 62, PR = 14, PT = 10, PB = 22;
+    const VOL_H = 55, SEP = 6;
+    const priceBot = H - PB - VOL_H - SEP;
+    const priceH = priceBot - PT;
+    const volTop = H - PB - VOL_H;
+    const cW = W - PL - PR;
     const N = candles.length;
     if (!N) return;
+
     const vLo = Math.min(...candles.map(c => c.l));
     const vHi = Math.max(...candles.map(c => c.h));
-    const yPad = (vHi - vLo) * 0.06 || 1;
+    const yPad = (vHi - vLo) * 0.05 || 1;
     const yLo = vLo - yPad, yHi = vHi + yPad;
-    const px = i => PL + (i + 0.5) / N * cW;
-    const py = v => H - PB - ((v - yLo) / (yHi - yLo)) * cH;
-    const bw = Math.max(1, Math.floor(cW / N * 0.6));
+    const px  = i => PL + (i + 0.5) / N * cW;
+    const ppy = v => priceBot - ((v - yLo) / (yHi - yLo)) * priceH;
+    const bw  = Math.max(1, Math.floor(cW / N * 0.6));
 
     ctx.clearRect(0, 0, W, H);
     ctx.fillStyle = '#0d1117'; ctx.fillRect(0, 0, W, H);
 
-    const rawStep = (yHi - yLo) / 4;
+    // ── Price grid ──
+    const rawStep = (yHi - yLo) / 5;
     const mag  = Math.pow(10, Math.floor(Math.log10(rawStep)));
     const step = Math.ceil(rawStep / mag) * mag;
     ctx.setLineDash([2, 4]); ctx.strokeStyle = '#21262d'; ctx.lineWidth = 1;
     ctx.font = '9px system-ui,sans-serif'; ctx.fillStyle = '#484f58';
     ctx.textBaseline = 'middle'; ctx.textAlign = 'right';
     for (let v = Math.ceil(yLo / step) * step; v <= yHi; v += step) {
-      const y = py(v);
+      const y = ppy(v);
+      if (y < PT || y > priceBot) continue;
       ctx.beginPath(); ctx.moveTo(PL, y); ctx.lineTo(W - PR, y); ctx.stroke();
       ctx.fillText(v >= 1000 ? (v / 1000).toFixed(1) + 'k' : v.toFixed(v < 10 ? 2 : 0), PL - 3, y);
     }
     ctx.setLineDash([]);
 
+    // ── SMAs ──
+    const src    = allCandles && allCandles.length >= candles.length ? allCandles : candles;
+    const offset = src.length - candles.length;
+    const smaConfigs = [
+      { period: 50,  color: '#e6c84a' },
+      { period: 150, color: '#56d0f5' },
+      { period: 200, color: '#c792ea' },
+    ];
+    for (const { period, color } of smaConfigs) {
+      const full = _smaLine(src, period);
+      ctx.strokeStyle = color; ctx.lineWidth = 1.2; ctx.setLineDash([]);
+      ctx.beginPath(); let started = false;
+      for (let i = 0; i < N; i++) {
+        const v = full[offset + i];
+        if (v == null || ppy(v) < PT || ppy(v) > priceBot) { started = false; continue; }
+        if (!started) { ctx.moveTo(px(i), ppy(v)); started = true; } else ctx.lineTo(px(i), ppy(v));
+      }
+      if (started) ctx.stroke();
+    }
+
+    // ── SMA legend ──
+    ctx.font = '8px system-ui,sans-serif'; ctx.textBaseline = 'top'; ctx.textAlign = 'left';
+    let lx = PL + 4;
+    for (const { period, color } of smaConfigs) {
+      if (_smaLine(src, period).some(v => v != null)) {
+        ctx.fillStyle = color;
+        const lbl = `SMA${period}`;
+        ctx.fillText(lbl, lx, PT + 1);
+        lx += ctx.measureText(lbl).width + 10;
+      }
+    }
+
+    // ── Candles ──
     for (let i = 0; i < N; i++) {
       const c = candles[i], x = px(i);
       const isUp = c.c >= c.o;
       const col  = isUp ? '#3fb950' : '#f85149';
       ctx.strokeStyle = col; ctx.lineWidth = 1;
-      ctx.beginPath(); ctx.moveTo(x, py(c.h)); ctx.lineTo(x, py(c.l)); ctx.stroke();
-      const bTop = py(Math.max(c.o, c.c)), bBot = py(Math.min(c.o, c.c));
+      ctx.beginPath(); ctx.moveTo(x, ppy(c.h)); ctx.lineTo(x, ppy(c.l)); ctx.stroke();
+      const bTop = ppy(Math.max(c.o, c.c)), bBot = ppy(Math.min(c.o, c.c));
       const bH = Math.max(1, bBot - bTop);
-      ctx.fillStyle = isUp ? 'rgba(63,185,80,0.75)' : 'rgba(248,81,73,0.75)';
+      ctx.fillStyle = isUp ? 'rgba(63,185,80,0.8)' : 'rgba(248,81,73,0.8)';
       ctx.fillRect(x - bw / 2, bTop, bw, bH);
       ctx.strokeRect(x - bw / 2, bTop, bw, bH);
     }
 
-    ctx.fillStyle = '#484f58'; ctx.textBaseline = 'top';
+    // ── Separator ──
+    ctx.strokeStyle = '#30363d'; ctx.lineWidth = 1; ctx.setLineDash([]);
+    ctx.beginPath(); ctx.moveTo(PL, volTop - SEP / 2); ctx.lineTo(W - PR, volTop - SEP / 2); ctx.stroke();
+
+    // ── Volume pane ──
+    const maxVol = Math.max(...candles.map(c => c.v || 0)) || 1;
+    const vpy = v => volTop + VOL_H - (v / maxVol) * VOL_H;
+    // 20-bar volume MA
+    const volMa = candles.map((_, i) => {
+      const win = candles.slice(Math.max(0, i - 19), i + 1);
+      return win.reduce((s, c) => s + (c.v || 0), 0) / win.length;
+    });
+    for (let i = 0; i < N; i++) {
+      const c = candles[i], x = px(i);
+      ctx.fillStyle = c.c >= c.o ? 'rgba(63,185,80,0.5)' : 'rgba(248,81,73,0.5)';
+      ctx.fillRect(x - bw / 2, vpy(c.v || 0), bw, volTop + VOL_H - vpy(c.v || 0));
+    }
+    ctx.strokeStyle = 'rgba(240,230,140,0.6)'; ctx.lineWidth = 1; ctx.beginPath();
+    volMa.forEach((v, i) => i === 0 ? ctx.moveTo(px(i), vpy(v)) : ctx.lineTo(px(i), vpy(v)));
+    ctx.stroke();
+    // Vol axis label
+    const vl = maxVol >= 1e9 ? (maxVol/1e9).toFixed(1)+'B' : maxVol >= 1e6 ? (maxVol/1e6).toFixed(1)+'M' : maxVol >= 1e3 ? (maxVol/1e3).toFixed(0)+'K' : maxVol.toFixed(0);
+    ctx.fillStyle = '#484f58'; ctx.font = '8px system-ui,sans-serif'; ctx.textAlign = 'right'; ctx.textBaseline = 'top';
+    ctx.fillText('Vol ' + vl, W - PR, volTop + 1);
+
+    // ── X labels ──
+    ctx.fillStyle = '#484f58'; ctx.textBaseline = 'top'; ctx.font = '9px system-ui,sans-serif';
     const lStep = Math.max(1, Math.round(N / 6));
     for (let i = 0; i < N; i += lStep) {
       const d = new Date(candles[i].t);
@@ -1813,26 +1892,30 @@
     const ranked = filteredData
       .filter(r => !r.failed)
       .slice()
-      .sort((a, b) => (b[sortBy] ?? -Infinity) - (a[sortBy] ?? -Infinity));
+      .sort((a, b) => _csSortAsc
+        ? (a[sortBy] ?? -Infinity) - (b[sortBy] ?? -Infinity)
+        : (b[sortBy] ?? -Infinity) - (a[sortBy] ?? -Infinity));
+    const topN = document.getElementById('csTopSelect')?.value || 'all';
+    const displayList = topN === 'all' ? ranked : ranked.slice(0, parseInt(topN, 10));
 
     const sortLabels = { w1:'0–1W', w3:'1–3W', w5:'3–5W', w7:'5–7W', w9:'7–9W', w11:'9–11W', w13:'11–13W', d1:'1D', h1:'1H' };
     document.getElementById('csViewMeta').textContent =
-      `${interval === '1h' ? 'Hourly' : 'Daily'} candlesticks · sorted by highest RS (${sortLabels[sortBy] || sortBy}) · ${ranked.length} tickers`;
+      `${interval === '1h' ? 'Hourly' : 'Daily'} candlesticks · sorted by RS (${sortLabels[sortBy] || sortBy}) ${_csSortAsc ? '▲' : '▼'} · showing ${displayList.length} of ${ranked.length} tickers`;
 
     const results = {};
-    for (let i = 0; i < ranked.length; i += 5) {
-      await Promise.all(ranked.slice(i, i + 5).map(async r => {
+    for (let i = 0; i < displayList.length; i += 5) {
+      await Promise.all(displayList.slice(i, i + 5).map(async r => {
         try { results[r.ticker] = await fetchOHLC(r.ticker, interval, range); }
         catch { results[r.ticker] = null; }
       }));
-      if (i + 5 < ranked.length) await sleep(300);
+      if (i + 5 < displayList.length) await sleep(300);
     }
 
     grid.innerHTML = '';
-    for (const row of ranked) {
-      const candles = results[row.ticker];
-      if (!candles || !candles.length) continue;
-      const slice   = candles.slice(-barCount);
+    for (const row of displayList) {
+      const allCandles = results[row.ticker];
+      if (!allCandles || !allCandles.length) continue;
+      const slice   = allCandles.slice(-barCount);
       const rsVal   = row[sortBy];
       const scoreText = rsVal != null ? `${rsVal >= 0 ? '+' : ''}${rsVal.toFixed(2)}%` : '—';
       const card = document.createElement('div');
@@ -1842,9 +1925,9 @@
           <span class="zs-ticker">${row.ticker}</span>
           <span class="zs-score ${rsVal != null && rsVal >= 0 ? 'pos' : 'neg'}">RS(${sortLabels[sortBy] || sortBy}): ${scoreText}</span>
         </div>
-        <canvas class="zs-canvas" width="760" height="160"></canvas>`;
+        <canvas class="zs-canvas" width="760" height="280"></canvas>`;
       grid.appendChild(card);
-      drawCandlestickChart(card.querySelector('canvas'), slice);
+      drawCandlestickChart(card.querySelector('canvas'), slice, allCandles);
     }
     if (!grid.children.length) grid.innerHTML = '<div class="cs-loading">No data available.</div>';
   }
@@ -1856,6 +1939,13 @@
     else view.style.display = 'none';
   }
 
+  function toggleCSSortDir() {
+    _csSortAsc = !_csSortAsc;
+    const btn = document.getElementById('csSortDirBtn');
+    if (btn) btn.innerHTML = _csSortAsc ? '&#9650; Asc' : '&#9660; Desc';
+    renderCandlestickView();
+  }
+
   // ── Candlestick Export ────────────────────────────────────────────────────
 
   function exportCandlesticksPNG() {
@@ -1863,7 +1953,7 @@
     if (!cards.length) { alert('Open the Candlestick Charts view and wait for charts to load first.'); return; }
     const W = 820, PAD = 20;
     const chartDrawW = W - PAD * 2;
-    const chartDrawH = 120, labelH = 22, gapH = 8;
+    const chartDrawH = 220, labelH = 22, gapH = 8;
     const rowH = labelH + chartDrawH + gapH;
     const headerH = 54;
     const out = document.createElement('canvas');
@@ -2036,6 +2126,16 @@
           <option value="100">100 Bars</option>
           <option value="200">200 Bars</option>
         </select>
+        <select id="csTopSelect" onchange="renderCandlestickView()">
+          <option value="all" selected>All</option>
+          <option value="5">Top 5</option>
+          <option value="10">Top 10</option>
+          <option value="15">Top 15</option>
+          <option value="20">Top 20</option>
+          <option value="25">Top 25</option>
+          <option value="50">Top 50</option>
+        </select>
+        <button id="csSortDirBtn" onclick="toggleCSSortDir()">&#9660; Desc</button>
         <button class="cs-export-btn" onclick="exportCandlesticksPNG()">&#8681; PNG</button>
         <button id="csExportJSONBtn" class="cs-export-btn" onclick="exportCandlesticksJSON()">&#8681; JSON</button>
         <button id="csViewClose" onclick="document.getElementById('csView').style.display='none'">×</button>
