@@ -414,6 +414,8 @@
     #csViewMeta   { font-size:0.78rem; color:#6e7681; }
     #csViewClose  { background:none; border:none; color:#8b949e; font-size:24px; cursor:pointer; line-height:1; }
     #csViewClose:hover { color:#e6edf3; }
+    .cs-export-btn { background:#21262d; border:1px solid #30363d; color:#8b949e; border-radius:6px; padding:5px 10px; font-size:0.82rem; cursor:pointer; }
+    .cs-export-btn:hover { color:#58a6ff; border-color:#58a6ff; }
     #csNavLink    { font-size:0.82rem; color:#8b949e; text-decoration:none; border:1px solid #30363d; border-radius:6px; padding:4px 10px; white-space:nowrap; }
     #csNavLink:hover { color:#58a6ff; border-color:#58a6ff; }
     #csIntervalSelect, #csBarSelect, #csSortSelect { background:#21262d; border:1px solid #30363d; color:#e6edf3; padding:5px 10px; border-radius:6px; font-size:0.82rem; cursor:pointer; }
@@ -2737,6 +2739,92 @@
     else view.style.display = 'none';
   }
 
+  // ── Candlestick Export ────────────────────────────────────────────────────
+
+  function exportCandlesticksPNG() {
+    const cards = [...document.querySelectorAll('#csViewGrid .zs-card')];
+    if (!cards.length) { alert('Open the Candlestick Charts view and wait for charts to load first.'); return; }
+    const W = 820, PAD = 20;
+    const chartDrawW = W - PAD * 2;
+    const chartDrawH = 120, labelH = 22, gapH = 8;
+    const rowH = labelH + chartDrawH + gapH;
+    const headerH = 54;
+    const out = document.createElement('canvas');
+    out.width = W; out.height = headerH + cards.length * rowH + PAD;
+    const ctx = out.getContext('2d');
+    ctx.fillStyle = '#0d1117'; ctx.fillRect(0, 0, out.width, out.height);
+
+    const interval   = document.getElementById('csIntervalSelect')?.value || '1d';
+    const sortBy     = document.getElementById('csSortSelect')?.value || 'w9';
+    const barCount   = document.getElementById('csBarSelect')?.value || '60';
+    const sortLabels = { w1:'0–1W', w3:'1–3W', w5:'3–5W', w7:'5–7W', w9:'7–9W', w11:'9–11W', w13:'11–13W', d1:'1D', h1:'1H' };
+
+    ctx.fillStyle = '#58a6ff'; ctx.font = 'bold 14px system-ui,sans-serif'; ctx.textAlign = 'left';
+    ctx.fillText('Candlestick Charts — Ranked by Relative Strength', PAD, 22);
+    ctx.fillStyle = '#6e7681'; ctx.font = '11px system-ui,sans-serif';
+    ctx.fillText(`Benchmark: ${currentBench}  ·  ${interval === '1h' ? 'Hourly' : 'Daily'}  ·  ${barCount} bars  ·  Sorted by RS ${sortLabels[sortBy] || sortBy}  ·  ${cards.length} tickers  ·  ${new Date().toLocaleDateString()}`, PAD, 40);
+    ctx.strokeStyle = '#21262d'; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(PAD, headerH - 4); ctx.lineTo(W - PAD, headerH - 4); ctx.stroke();
+
+    let y = headerH;
+    for (const card of cards) {
+      const ticker   = card.querySelector('.zs-ticker')?.textContent || '';
+      const score    = card.querySelector('.zs-score')?.textContent  || '';
+      const scorePos = card.querySelector('.zs-score')?.classList.contains('pos');
+      const canvas   = card.querySelector('canvas');
+      ctx.fillStyle = '#e6edf3'; ctx.font = 'bold 12px system-ui,sans-serif'; ctx.textAlign = 'left';
+      ctx.fillText(ticker, PAD, y + 15);
+      ctx.fillStyle = scorePos ? '#3fb950' : '#f85149'; ctx.font = '11px system-ui,sans-serif'; ctx.textAlign = 'right';
+      ctx.fillText(score, W - PAD, y + 15);
+      if (canvas) ctx.drawImage(canvas, PAD, y + labelH, chartDrawW, chartDrawH);
+      y += rowH;
+    }
+    const link = document.createElement('a');
+    link.download = `rs-charts-${new Date().toISOString().slice(0, 10)}.png`;
+    link.href = out.toDataURL('image/png');
+    link.click();
+  }
+
+  async function exportCandlesticksJSON() {
+    const interval = document.getElementById('csIntervalSelect')?.value || '1d';
+    const barCount = parseInt(document.getElementById('csBarSelect')?.value || '60', 10);
+    const sortBy   = document.getElementById('csSortSelect')?.value || 'w9';
+    const range    = interval === '1h' ? '5d' : '1y';
+    const sortLabels = { w1:'0–1W', w3:'1–3W', w5:'3–5W', w7:'5–7W', w9:'7–9W', w11:'9–11W', w13:'11–13W', d1:'1D', h1:'1H' };
+    const ranked = filteredData.filter(r => !r.failed).slice()
+      .sort((a, b) => (b[sortBy] ?? -Infinity) - (a[sortBy] ?? -Infinity));
+    const fmt = v => v != null ? +v.toFixed(2) : null;
+    const output = {
+      generated: new Date().toISOString(),
+      benchmark: currentBench,
+      interval: interval === '1h' ? 'hourly' : 'daily',
+      bars: barCount,
+      sorted_by: `RS ${sortLabels[sortBy] || sortBy}`,
+      tickers: ranked.map(row => ({
+        ticker: row.ticker,
+        rs: { '1h': fmt(row.h1), '1d': fmt(row.d1), '0-1w': fmt(row.w1), '1-3w': fmt(row.w3), '3-5w': fmt(row.w5), '5-7w': fmt(row.w7), '7-9w': fmt(row.w9), '9-11w': fmt(row.w11), '11-13w': fmt(row.w13) },
+        today_pct: fmt(row.today),
+        rsi14: row.rsi14 != null ? +row.rsi14.toFixed(1) : null,
+        ma_dist_pct: { ema9: fmt(row.ema9), sma20: fmt(row.sma20), sma50: fmt(row.sma50), sma200: fmt(row.sma200) },
+        candles: (_ohlcCache[`${row.ticker}_${interval}_${range}`] || []).slice(-barCount).map(c => ({
+          date: new Date(c.t).toISOString().slice(0, 10),
+          o: +c.o.toFixed(2), h: +c.h.toFixed(2), l: +c.l.toFixed(2), c: +c.c.toFixed(2)
+        }))
+      }))
+    };
+    const text = JSON.stringify(output, null, 2);
+    const btn = document.getElementById('csExportJSONBtn');
+    try {
+      await navigator.clipboard.writeText(text);
+      const orig = btn.textContent; btn.textContent = '✓ Copied'; setTimeout(() => btn.textContent = orig, 2000);
+    } catch {
+      const a = document.createElement('a');
+      a.download = `rs-data-${new Date().toISOString().slice(0, 10)}.json`;
+      a.href = URL.createObjectURL(new Blob([text], { type: 'application/json' }));
+      a.click();
+    }
+  }
+
   // ── Sort ──────────────────────────────────────────────────────────────────
 
   function attachSortHandlers() {
@@ -2853,6 +2941,8 @@
           <option value="100">100 Bars</option>
           <option value="200">200 Bars</option>
         </select>
+        <button class="cs-export-btn" onclick="exportCandlesticksPNG()">&#8681; PNG</button>
+        <button id="csExportJSONBtn" class="cs-export-btn" onclick="exportCandlesticksJSON()">&#8681; JSON</button>
         <button id="csViewClose" onclick="document.getElementById('csView').style.display='none'">×</button>
       </div>
     </div>
