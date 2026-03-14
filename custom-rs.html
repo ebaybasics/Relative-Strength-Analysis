@@ -840,7 +840,72 @@
 
   // ── ETF Holdings Import ────────────────────────────────────────────────────
 
-  const FMP_KEY = 'a1104103e36b160caf1b975f0a8e37d6';
+  async function _loadSheetJS() {
+    if (window.XLSX) return;
+    return new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js';
+      s.onload = resolve; s.onerror = reject;
+      document.head.appendChild(s);
+    });
+  }
+
+  // Source 1: SSGA (State Street) — works for all SPDR / SSGA ETFs, returns all holdings
+  async function _fetchSSGA(ticker) {
+    const url = `https://www.ssga.com/us/en/institutional/etfs/library-content/products/fund-data/etfs/us/holdings-daily-us-en-${ticker.toLowerCase()}.xlsx`;
+    for (const wrap of PROXIES) {
+      try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
+        let res;
+        try { res = await fetch(wrap(url), { signal: controller.signal }); }
+        finally { clearTimeout(timer); }
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const buffer = await res.arrayBuffer();
+        await _loadSheetJS();
+        const wb   = XLSX.read(new Uint8Array(buffer), { type: 'array' });
+        const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, defval: '' });
+        // Find the row containing "Ticker" as a column header
+        let tickerCol = -1, dataStart = -1;
+        for (let i = 0; i < rows.length; i++) {
+          const idx = rows[i].findIndex(c => typeof c === 'string' && c.trim().toLowerCase() === 'ticker');
+          if (idx !== -1) { tickerCol = idx; dataStart = i + 1; break; }
+        }
+        if (tickerCol === -1) throw new Error('No Ticker column');
+        const syms = [];
+        for (let i = dataStart; i < rows.length; i++) {
+          const s = String(rows[i][tickerCol] ?? '').trim().toUpperCase();
+          if (s && /^[A-Z][A-Z0-9.\-]{0,9}$/.test(s)) syms.push(s);
+        }
+        if (syms.length) return { syms, source: `SSGA · ${syms.length} holdings` };
+      } catch { /* try next proxy */ }
+      await new Promise(r => setTimeout(r, 200));
+    }
+    return null;
+  }
+
+  // Source 2: Yahoo Finance topHoldings — free, works for any ETF, limited to ~25
+  async function _fetchYahooTop(ticker) {
+    const base = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(ticker)}?modules=topHoldings`;
+    for (const wrap of PROXIES) {
+      try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
+        let res;
+        try { res = await fetch(wrap(base), { signal: controller.signal }); }
+        finally { clearTimeout(timer); }
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = await res.json();
+        const raw  = json?.quoteSummary?.result?.[0]?.topHoldings?.holdings;
+        if (raw && raw.length) {
+          const syms = raw.map(h => h.symbol).filter(s => s && /^[A-Z][A-Z0-9.\-]{0,9}$/.test(s));
+          if (syms.length) return { syms, source: `Yahoo Finance · top ${syms.length} holdings` };
+        }
+      } catch { /* try next proxy */ }
+      await new Promise(r => setTimeout(r, 200));
+    }
+    return null;
+  }
 
   async function fetchETFHoldings() {
     const etfInput = document.getElementById('etfHoldingsInput');
@@ -851,53 +916,22 @@
     statusEl.textContent = `Fetching ${etfTicker} holdings…`;
     statusEl.style.color = '#8b949e';
 
-    const url = `https://financialmodelingprep.com/api/v3/etf-holder/${encodeURIComponent(etfTicker)}?apikey=${FMP_KEY}`;
-    let data = null;
+    const result = (await _fetchSSGA(etfTicker)) ?? (await _fetchYahooTop(etfTicker));
 
-    // Try direct first (FMP supports CORS), then fall back through proxies
-    const attempts = [u => u, ...PROXIES];
-    for (const wrap of attempts) {
-      try {
-        const controller = new AbortController();
-        const timer      = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
-        let res;
-        try { res = await fetch(wrap(url), { signal: controller.signal }); }
-        finally { clearTimeout(timer); }
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        const json = await res.json();
-        if (Array.isArray(json) && json.length) { data = json; break; }
-        // FMP returns { "Error Message": "..." } on bad key/symbol
-        if (json['Error Message']) throw new Error(json['Error Message']);
-      } catch (e) {
-        await new Promise(r => setTimeout(r, 250));
-      }
-    }
-
-    if (!data || !data.length) {
-      statusEl.textContent = `⚠ No holdings found for ${etfTicker} — check the ticker or try again`;
+    if (!result) {
+      statusEl.textContent = `⚠ No holdings found for ${etfTicker}`;
       statusEl.style.color = '#f85149';
       return;
     }
 
-    // FMP returns { asset, weightPercentage, ... } — sort by weight desc, filter valid US symbols
-    data.sort((a, b) => (b.weightPercentage ?? 0) - (a.weightPercentage ?? 0));
-    const symbols = data
-      .map(h => (h.asset || '').trim().toUpperCase())
-      .filter(s => s && /^[A-Z][A-Z0-9.\-]{0,9}$/.test(s));
-
-    if (!symbols.length) {
-      statusEl.textContent = `⚠ No valid symbols parsed from ${etfTicker} holdings`;
-      statusEl.style.color = '#f85149';
-      return;
-    }
-
+    const { syms, source } = result;
     const COLS = 6;
     const rows = [];
-    for (let i = 0; i < symbols.length; i += COLS)
-      rows.push('    ' + symbols.slice(i, i + COLS).map(s => `"${s}"`).join(', '));
+    for (let i = 0; i < syms.length; i += COLS)
+      rows.push('    ' + syms.slice(i, i + COLS).map(s => `"${s}"`).join(', '));
     document.getElementById('tickerInput').value = `tickers = [\n${rows.join(',\n')}\n]`;
 
-    statusEl.textContent = `✓ ${symbols.length} holdings loaded from ${etfTicker}`;
+    statusEl.textContent = `✓ ${source}`;
     statusEl.style.color = '#3fb950';
   }
 
