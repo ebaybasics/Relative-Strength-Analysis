@@ -213,6 +213,20 @@
     #zsNavLink:hover { color:#58a6ff; border-color:#58a6ff; }
     #zsLookbackSelect, #zsChartTypeSelect, #zsBarSelect { background:#21262d; border:1px solid #30363d; color:#e6edf3; padding:5px 10px; border-radius:6px; font-size:0.82rem; cursor:pointer; }
     #zsLookbackSelect:focus, #zsChartTypeSelect:focus, #zsBarSelect:focus { outline:none; border-color:#58a6ff; }
+
+    /* ── Candlestick Chart View ── */
+    #csView { position:fixed; inset:0; background:#0d1117; overflow-y:auto; z-index:900; display:none; }
+    #csViewInner { max-width:820px; margin:0 auto; padding:28px 24px; }
+    #csViewHeader { display:flex; align-items:center; justify-content:space-between; margin-bottom:24px; padding-bottom:16px; border-bottom:1px solid #21262d; }
+    #csViewTitle  { font-size:1.1rem; color:#58a6ff; font-weight:600; }
+    #csViewMeta   { font-size:0.78rem; color:#6e7681; }
+    #csViewClose  { background:none; border:none; color:#8b949e; font-size:24px; cursor:pointer; line-height:1; }
+    #csViewClose:hover { color:#e6edf3; }
+    #csNavLink    { font-size:0.82rem; color:#8b949e; text-decoration:none; border:1px solid #30363d; border-radius:6px; padding:4px 10px; white-space:nowrap; }
+    #csNavLink:hover { color:#58a6ff; border-color:#58a6ff; }
+    #csIntervalSelect, #csBarSelect, #csSortSelect { background:#21262d; border:1px solid #30363d; color:#e6edf3; padding:5px 10px; border-radius:6px; font-size:0.82rem; cursor:pointer; }
+    #csIntervalSelect:focus, #csBarSelect:focus, #csSortSelect:focus { outline:none; border-color:#58a6ff; }
+    .cs-loading { text-align:center; padding:32px; color:#8b949e; }
   </style>
 </head>
 <body>
@@ -238,6 +252,7 @@
   </div>
   <div class="row-count" id="rowCount"></div>
   <a href="#" id="zsNavLink" onclick="toggleZSView(event)">&#8645; Z-Score Charts</a>
+  <a href="#" id="csNavLink" onclick="toggleCSView(event)">&#9650;&#9660; Candlestick Charts</a>
 </div>
 
 <div class="table-wrap" id="tableWrap">
@@ -1575,6 +1590,7 @@
     if (e.key === 'Escape') {
       document.getElementById('rsChartOverlay').style.display = 'none';
       document.getElementById('zsView').style.display = 'none';
+      document.getElementById('csView').style.display = 'none';
     }
   });
 
@@ -1797,6 +1813,161 @@
     else view.style.display = 'none';
   }
 
+  // ── Candlestick Chart View ────────────────────────────────────────────────
+
+  const _ohlcCache = {};
+
+  async function fetchOHLC(ticker, interval, range) {
+    const cacheKey = `${ticker}_${interval}_${range}`;
+    if (_ohlcCache[cacheKey]) return _ohlcCache[cacheKey];
+    const sym  = SYMBOL_MAP[ticker] || ticker;
+    const base = `https://query1.finance.yahoo.com/v8/finance/chart/${sym}?interval=${interval}&range=${range}`;
+    let lastErr;
+    for (let pi = 0; pi < PROXIES.length; pi++) {
+      try {
+        const url        = PROXIES[pi](base);
+        const controller = new AbortController();
+        const timer      = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
+        let res;
+        try { res = await fetch(url, { signal: controller.signal }); }
+        finally { clearTimeout(timer); }
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json   = await res.json();
+        const result = json.chart.result[0];
+        const q  = result.indicators.quote[0];
+        const ts = result.timestamp;
+        const out = [];
+        let lastC = null;
+        for (let i = 0; i < ts.length; i++) {
+          const c = q.close[i];
+          if (c != null) lastC = c;
+          if (lastC == null) continue;
+          out.push({ t: ts[i] * 1000, o: q.open[i] ?? lastC, h: q.high[i] ?? lastC, l: q.low[i] ?? lastC, c: lastC });
+        }
+        if (!out.length) throw new Error('empty');
+        _ohlcCache[cacheKey] = out;
+        return out;
+      } catch (e) {
+        lastErr = e;
+        if (pi < PROXIES.length - 1) await sleep(250);
+      }
+    }
+    throw lastErr;
+  }
+
+  function drawCandlestickChart(canvas, candles) {
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width, H = canvas.height;
+    const PL = 56, PR = 12, PT = 8, PB = 22;
+    const cW = W - PL - PR, cH = H - PT - PB;
+    const N = candles.length;
+    if (!N) return;
+    const vLo = Math.min(...candles.map(c => c.l));
+    const vHi = Math.max(...candles.map(c => c.h));
+    const yPad = (vHi - vLo) * 0.06 || 1;
+    const yLo = vLo - yPad, yHi = vHi + yPad;
+    const px = i => PL + (i + 0.5) / N * cW;
+    const py = v => H - PB - ((v - yLo) / (yHi - yLo)) * cH;
+    const bw = Math.max(1, Math.floor(cW / N * 0.6));
+
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0d1117'; ctx.fillRect(0, 0, W, H);
+
+    // Y grid
+    const rawStep = (yHi - yLo) / 4;
+    const mag  = Math.pow(10, Math.floor(Math.log10(rawStep)));
+    const step = Math.ceil(rawStep / mag) * mag;
+    ctx.setLineDash([2, 4]); ctx.strokeStyle = '#21262d'; ctx.lineWidth = 1;
+    ctx.font = '9px system-ui,sans-serif'; ctx.fillStyle = '#484f58';
+    ctx.textBaseline = 'middle'; ctx.textAlign = 'right';
+    for (let v = Math.ceil(yLo / step) * step; v <= yHi; v += step) {
+      const y = py(v);
+      ctx.beginPath(); ctx.moveTo(PL, y); ctx.lineTo(W - PR, y); ctx.stroke();
+      ctx.fillText(v >= 1000 ? (v / 1000).toFixed(1) + 'k' : v.toFixed(v < 10 ? 2 : 0), PL - 3, y);
+    }
+    ctx.setLineDash([]);
+
+    // Candles
+    for (let i = 0; i < N; i++) {
+      const c = candles[i], x = px(i);
+      const isUp = c.c >= c.o;
+      const col  = isUp ? '#3fb950' : '#f85149';
+      ctx.strokeStyle = col; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(x, py(c.h)); ctx.lineTo(x, py(c.l)); ctx.stroke();
+      const bTop = py(Math.max(c.o, c.c)), bBot = py(Math.min(c.o, c.c));
+      const bH = Math.max(1, bBot - bTop);
+      ctx.fillStyle = isUp ? 'rgba(63,185,80,0.75)' : 'rgba(248,81,73,0.75)';
+      ctx.fillRect(x - bw / 2, bTop, bw, bH);
+      ctx.strokeRect(x - bw / 2, bTop, bw, bH);
+    }
+
+    // X labels
+    ctx.fillStyle = '#484f58'; ctx.textBaseline = 'top';
+    const lStep = Math.max(1, Math.round(N / 6));
+    for (let i = 0; i < N; i += lStep) {
+      const d = new Date(candles[i].t);
+      ctx.textAlign = i === 0 ? 'left' : 'center';
+      ctx.fillText(`${d.getMonth() + 1}/${d.getDate()}`, px(i), H - PB + 3);
+    }
+    ctx.textAlign = 'right'; ctx.fillText('Now', px(N - 1), H - PB + 3);
+  }
+
+  async function renderCandlestickView() {
+    const interval = document.getElementById('csIntervalSelect')?.value || '1d';
+    const barCount = parseInt(document.getElementById('csBarSelect')?.value || '60', 10);
+    const sortBy   = document.getElementById('csSortSelect')?.value || 'w9';
+    const range    = interval === '1h' ? '5d' : '1y';
+
+    const grid = document.getElementById('csViewGrid');
+    grid.innerHTML = '<div class="cs-loading">Loading candlestick data&hellip;</div>';
+    document.getElementById('csView').style.display = 'block';
+
+    const ranked = filteredData
+      .filter(r => !r.failed)
+      .slice()
+      .sort((a, b) => (b[sortBy] ?? -Infinity) - (a[sortBy] ?? -Infinity));
+
+    const sortLabels = { w1:'0–1W', w3:'1–3W', w5:'3–5W', w7:'5–7W', w9:'7–9W', w11:'9–11W', w13:'11–13W', d1:'1D', h1:'1H' };
+    document.getElementById('csViewMeta').textContent =
+      `${interval === '1h' ? 'Hourly' : 'Daily'} candlesticks · sorted by highest RS (${sortLabels[sortBy] || sortBy}) · ${ranked.length} tickers`;
+
+    const results = {};
+    for (let i = 0; i < ranked.length; i += 5) {
+      await Promise.all(ranked.slice(i, i + 5).map(async r => {
+        try { results[r.ticker] = await fetchOHLC(r.ticker, interval, range); }
+        catch { results[r.ticker] = null; }
+      }));
+      if (i + 5 < ranked.length) await sleep(300);
+    }
+
+    grid.innerHTML = '';
+    for (const row of ranked) {
+      const candles = results[row.ticker];
+      if (!candles || !candles.length) continue;
+      const slice   = candles.slice(-barCount);
+      const rsVal   = row[sortBy];
+      const scoreText = rsVal != null ? `${rsVal >= 0 ? '+' : ''}${rsVal.toFixed(2)}%` : '—';
+      const card = document.createElement('div');
+      card.className = 'zs-card';
+      card.innerHTML = `
+        <div class="zs-card-header">
+          <span class="zs-ticker">${row.ticker}</span>
+          <span class="zs-score ${rsVal != null && rsVal >= 0 ? 'pos' : 'neg'}">RS(${sortLabels[sortBy] || sortBy}): ${scoreText}</span>
+        </div>
+        <canvas class="zs-canvas" width="760" height="160"></canvas>`;
+      grid.appendChild(card);
+      drawCandlestickChart(card.querySelector('canvas'), slice);
+    }
+    if (!grid.children.length) grid.innerHTML = '<div class="cs-loading">No data available.</div>';
+  }
+
+  function toggleCSView(e) {
+    e.preventDefault();
+    const view = document.getElementById('csView');
+    if (view.style.display === 'none' || !view.style.display) renderCandlestickView();
+    else view.style.display = 'none';
+  }
+
   // ── Sort ──────────────────────────────────────────────────────────────────
 
   function attachSortHandlers() {
@@ -1860,6 +2031,41 @@
       </div>
     </div>
     <div id="zsViewGrid"></div>
+  </div>
+</div>
+<div id="csView">
+  <div id="csViewInner">
+    <div id="csViewHeader">
+      <div>
+        <div id="csViewTitle">Candlestick Charts — Ranked by RS</div>
+        <div id="csViewMeta">Daily candlesticks · sorted by highest RS · loading…</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <select id="csSortSelect" onchange="renderCandlestickView()">
+          <option value="w9" selected>RS 7–9W</option>
+          <option value="w1">RS 0–1W</option>
+          <option value="w3">RS 1–3W</option>
+          <option value="w5">RS 3–5W</option>
+          <option value="w7">RS 5–7W</option>
+          <option value="w11">RS 9–11W</option>
+          <option value="w13">RS 11–13W</option>
+          <option value="d1">RS 1D</option>
+          <option value="h1">RS 1H</option>
+        </select>
+        <select id="csIntervalSelect" onchange="renderCandlestickView()">
+          <option value="1d" selected>Daily</option>
+          <option value="1h">Hourly</option>
+        </select>
+        <select id="csBarSelect" onchange="renderCandlestickView()">
+          <option value="20">20 Bars</option>
+          <option value="60" selected>60 Bars</option>
+          <option value="100">100 Bars</option>
+          <option value="200">200 Bars</option>
+        </select>
+        <button id="csViewClose" onclick="document.getElementById('csView').style.display='none'">×</button>
+      </div>
+    </div>
+    <div id="csViewGrid"></div>
   </div>
 </div>
 <div id="rsChartOverlay" style="display:none" onclick="if(event.target===this)this.style.display='none'">
