@@ -451,6 +451,15 @@
       <button class="btn-import" onclick="document.getElementById('csvFileInput').click()">&#8613; Import CSV</button>
       <span id="csvImportStatus" class="hint"></span>
     </div>
+    <div class="csv-import-row" style="margin-top:6px;">
+      <span class="hint">or import ETF holdings:</span>
+      <input type="text" id="etfHoldingsInput" placeholder="e.g. XLK" maxlength="12"
+             style="background:#0d1117;border:1px solid #30363d;color:#e6edf3;border-radius:6px;padding:5px 8px;font-size:0.78rem;width:80px;text-transform:uppercase;font-weight:600;letter-spacing:1px;outline:none;"
+             onfocus="this.style.borderColor='#58a6ff'" onblur="this.style.borderColor='#30363d'"
+             onkeydown="if(event.key==='Enter')fetchETFHoldings()"/>
+      <button class="btn-import" onclick="fetchETFHoldings()">&#8615; Load Holdings</button>
+      <span id="etfHoldingsStatus" class="hint"></span>
+    </div>
   </div>
 
   <div class="config-right">
@@ -827,6 +836,60 @@
       statusEl.style.color = '#f85149';
     };
     reader.readAsText(file);
+  }
+
+  // ── ETF Holdings Import ────────────────────────────────────────────────────
+
+  async function fetchETFHoldings() {
+    const etfInput = document.getElementById('etfHoldingsInput');
+    const statusEl = document.getElementById('etfHoldingsStatus');
+    const etfTicker = etfInput.value.trim().toUpperCase();
+    if (!etfTicker) { statusEl.textContent = 'Enter a ticker.'; statusEl.style.color = '#f85149'; return; }
+
+    statusEl.textContent = `Fetching ${etfTicker} holdings…`;
+    statusEl.style.color = '#8b949e';
+
+    const base = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(etfTicker)}?modules=topHoldings`;
+    let holdings = null;
+
+    for (let pi = 0; pi < PROXIES.length; pi++) {
+      try {
+        const url        = PROXIES[pi](base);
+        const controller = new AbortController();
+        const timer      = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
+        let res;
+        try { res = await fetch(url, { signal: controller.signal }); }
+        finally { clearTimeout(timer); }
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const json = await res.json();
+        const raw  = json?.quoteSummary?.result?.[0]?.topHoldings?.holdings;
+        if (raw && raw.length) { holdings = raw; break; }
+      } catch (e) {
+        if (pi < PROXIES.length - 1) await new Promise(r => setTimeout(r, 250));
+      }
+    }
+
+    if (!holdings || !holdings.length) {
+      statusEl.textContent = `⚠ No holdings found for ${etfTicker} — may not be an ETF, or data unavailable`;
+      statusEl.style.color = '#f85149';
+      return;
+    }
+
+    const symbols = holdings.map(h => h.symbol).filter(s => s && /^[A-Z][A-Z0-9.\-]{0,9}$/.test(s));
+    if (!symbols.length) {
+      statusEl.textContent = `⚠ No valid symbols parsed from ${etfTicker} holdings`;
+      statusEl.style.color = '#f85149';
+      return;
+    }
+
+    const COLS = 6;
+    const rows = [];
+    for (let i = 0; i < symbols.length; i += COLS)
+      rows.push('    ' + symbols.slice(i, i + COLS).map(s => `"${s}"`).join(', '));
+    document.getElementById('tickerInput').value = `tickers = [\n${rows.join(',\n')}\n]`;
+
+    statusEl.textContent = `✓ ${symbols.length} holdings loaded from ${etfTicker}`;
+    statusEl.style.color = '#3fb950';
   }
 
   // ── Fetch ─────────────────────────────────────────────────────────────────
