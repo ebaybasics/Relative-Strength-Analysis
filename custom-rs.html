@@ -840,6 +840,8 @@
 
   // ── ETF Holdings Import ────────────────────────────────────────────────────
 
+  const FMP_KEY = 'a1104103e36b160caf1b975f0a8e37d6';
+
   async function fetchETFHoldings() {
     const etfInput = document.getElementById('etfHoldingsInput');
     const statusEl = document.getElementById('etfHoldingsStatus');
@@ -849,33 +851,40 @@
     statusEl.textContent = `Fetching ${etfTicker} holdings…`;
     statusEl.style.color = '#8b949e';
 
-    const base = `https://query1.finance.yahoo.com/v10/finance/quoteSummary/${encodeURIComponent(etfTicker)}?modules=topHoldings`;
-    let holdings = null;
+    const url = `https://financialmodelingprep.com/api/v3/etf-holder/${encodeURIComponent(etfTicker)}?apikey=${FMP_KEY}`;
+    let data = null;
 
-    for (let pi = 0; pi < PROXIES.length; pi++) {
+    // Try direct first (FMP supports CORS), then fall back through proxies
+    const attempts = [u => u, ...PROXIES];
+    for (const wrap of attempts) {
       try {
-        const url        = PROXIES[pi](base);
         const controller = new AbortController();
         const timer      = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
         let res;
-        try { res = await fetch(url, { signal: controller.signal }); }
+        try { res = await fetch(wrap(url), { signal: controller.signal }); }
         finally { clearTimeout(timer); }
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const json = await res.json();
-        const raw  = json?.quoteSummary?.result?.[0]?.topHoldings?.holdings;
-        if (raw && raw.length) { holdings = raw; break; }
+        if (Array.isArray(json) && json.length) { data = json; break; }
+        // FMP returns { "Error Message": "..." } on bad key/symbol
+        if (json['Error Message']) throw new Error(json['Error Message']);
       } catch (e) {
-        if (pi < PROXIES.length - 1) await new Promise(r => setTimeout(r, 250));
+        await new Promise(r => setTimeout(r, 250));
       }
     }
 
-    if (!holdings || !holdings.length) {
-      statusEl.textContent = `⚠ No holdings found for ${etfTicker} — may not be an ETF, or data unavailable`;
+    if (!data || !data.length) {
+      statusEl.textContent = `⚠ No holdings found for ${etfTicker} — check the ticker or try again`;
       statusEl.style.color = '#f85149';
       return;
     }
 
-    const symbols = holdings.map(h => h.symbol).filter(s => s && /^[A-Z][A-Z0-9.\-]{0,9}$/.test(s));
+    // FMP returns { asset, weightPercentage, ... } — sort by weight desc, filter valid US symbols
+    data.sort((a, b) => (b.weightPercentage ?? 0) - (a.weightPercentage ?? 0));
+    const symbols = data
+      .map(h => (h.asset || '').trim().toUpperCase())
+      .filter(s => s && /^[A-Z][A-Z0-9.\-]{0,9}$/.test(s));
+
     if (!symbols.length) {
       statusEl.textContent = `⚠ No valid symbols parsed from ${etfTicker} holdings`;
       statusEl.style.color = '#f85149';
