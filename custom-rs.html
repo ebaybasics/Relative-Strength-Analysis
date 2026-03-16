@@ -397,6 +397,7 @@
     .zs-card      { background:#161b22; border:1px solid #21262d; border-radius:8px; padding:14px 16px; }
     .zs-card-header { display:flex; align-items:baseline; gap:10px; margin-bottom:8px; }
     .zs-ticker    { font-size:0.88rem; font-weight:700; color:#e6edf3; letter-spacing:0.3px; }
+    .zs-industry  { font-size:0.75rem; color:#6e7681; font-weight:400; }
     .zs-score     { font-size:0.82rem; font-weight:600; }
     .zs-score.pos { color:#3fb950; }
     .zs-score.neg { color:#f85149; }
@@ -2701,9 +2702,11 @@
         : `${lastVal >= 0 ? '+' : ''}${lastVal.toFixed(2)}σ`;
       const card = document.createElement('div');
       card.className = 'zs-card';
+      const zsLabel = tickerMeta[ticker]?.industry || '';
       card.innerHTML = `
         <div class="zs-card-header">
           <span class="zs-ticker">${ticker}</span>
+          ${zsLabel ? `<span class="zs-industry">${zsLabel}</span>` : ''}
           <span class="zs-score ${lastVal >= 50 || (chartType !== 'pct' && lastVal >= 0) ? 'pos' : 'neg'}">${scoreText}</span>
         </div>
         <canvas class="zs-canvas" width="760" height="110"></canvas>`;
@@ -2945,9 +2948,11 @@
       const scoreText = rsVal != null ? `${rsVal >= 0 ? '+' : ''}${rsVal.toFixed(2)}%` : '—';
       const card = document.createElement('div');
       card.className = 'zs-card';
+      const csLabel = tickerMeta[row.ticker]?.industry || '';
       card.innerHTML = `
         <div class="zs-card-header">
           <span class="zs-ticker">${row.ticker}</span>
+          ${csLabel ? `<span class="zs-industry">${csLabel}</span>` : ''}
           <span class="zs-score ${rsVal != null && rsVal >= 0 ? 'pos' : 'neg'}">RS(${sortLabels[sortBy] || sortBy}): ${scoreText}</span>
         </div>
         <canvas class="zs-canvas" width="760" height="280"></canvas>`;
