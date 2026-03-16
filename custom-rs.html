@@ -2373,8 +2373,10 @@
   // ── Z-Score Chart View ────────────────────────────────────────────────────
 
   function computeZScoreRS(tickerSeries, benchSeries, chartBars, lookback) {
-    const needed = chartBars + 1;
-    if (!tickerSeries || !benchSeries || tickerSeries.length < needed || benchSeries.length < needed) return null;
+    if (!tickerSeries || !benchSeries) return null;
+    const useBars = Math.min(chartBars, tickerSeries.length - 1, benchSeries.length - 1);
+    if (useBars < lookback + 1) return null;
+    const needed = useBars + 1;
     const t = tickerSeries.slice(-needed), b = benchSeries.slice(-needed);
     let cum = 0;
     const cumRS = [];
@@ -2407,8 +2409,10 @@
   }
 
   function computeRawRS(tickerSeries, benchSeries, chartBars) {
-    const needed = chartBars + 1;
-    if (!tickerSeries || !benchSeries || tickerSeries.length < needed || benchSeries.length < needed) return null;
+    if (!tickerSeries || !benchSeries) return null;
+    const useBars = Math.min(chartBars, tickerSeries.length - 1, benchSeries.length - 1);
+    if (useBars < 2) return null;
+    const needed = useBars + 1;
     const t = tickerSeries.slice(-needed), b = benchSeries.slice(-needed);
     let cum = 0;
     const cumRS = [];
