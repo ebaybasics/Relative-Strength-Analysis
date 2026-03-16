@@ -423,6 +423,8 @@
     #csSortDirBtn { background:#21262d; border:1px solid #30363d; color:#8b949e; border-radius:6px; padding:5px 10px; font-size:0.82rem; cursor:pointer; }
     #csSortDirBtn:hover { color:#58a6ff; border-color:#58a6ff; }
     .cs-loading { text-align:center; padding:32px; color:#8b949e; }
+    .mansfield-chk-wrap { display:inline-flex; align-items:center; gap:5px; font-size:0.82rem; color:#8b949e; cursor:pointer; user-select:none; }
+    .mansfield-chk-wrap input[type=checkbox] { accent-color:#58a6ff; cursor:pointer; }
   </style>
 </head>
 <body>
@@ -894,6 +896,23 @@
 
   // ── Math ──────────────────────────────────────────────────────────────────
 
+  function computeMansfieldRS(daily, benchD) {
+    if (!daily || !benchD) return null;
+    const avail = Math.min(daily.length, benchD.length);
+    if (avail < 3) return null;
+    const period = Math.min(200, avail - 1);
+    let sum = 0;
+    for (let k = 1; k <= period; k++) {
+      const d = daily[daily.length - 1 - k];
+      const b = benchD[benchD.length - 1 - k];
+      if (d && b) sum += d / b;
+    }
+    const ma = sum / period;
+    if (!ma) return null;
+    const curr = daily[daily.length - 1] / benchD[benchD.length - 1];
+    return (curr / ma - 1) * 100;
+  }
+
   function ret(c, n) {
     if (!c || c.length <= n) return null;
     return (c[c.length-1] / c[c.length-1-n] - 1) * 100;
@@ -993,6 +1012,7 @@
       sma50:  distMA(price, sma(daily, 50)),
       sma150: distMA(price, sma(daily, 150)),
       sma200: distMA(price, sma(daily, 200)),
+      mansRS: computeMansfieldRS(daily, benchD),
     };
   }
 
@@ -2372,6 +2392,46 @@
 
   // ── Z-Score Chart View ────────────────────────────────────────────────────
 
+  function computeAllPercentileRS(rows, cfg, chartBars) {
+    const benchData = cfg.bench();
+    if (!benchData) return {};
+    const maxBars = Math.min(chartBars, cfg.maxBars);
+    const rawRS = {};
+    let minLen = maxBars;
+    for (const row of rows) {
+      const s = row[cfg.key];
+      if (!s) continue;
+      const useBars = Math.min(maxBars, s.length - 1, benchData.length - 1);
+      if (useBars < 2) continue;
+      const needed = useBars + 1;
+      const t = s.slice(-needed), b = benchData.slice(-needed);
+      let cum = 0;
+      const cumRS = [];
+      for (let i = 1; i < needed; i++) {
+        cum += ((t[i] / t[i-1] - 1) - (b[i] / b[i-1] - 1)) * 100;
+        cumRS.push(cum);
+      }
+      rawRS[row.ticker] = cumRS;
+      minLen = Math.min(minLen, cumRS.length);
+    }
+    const tickers = Object.keys(rawRS);
+    if (!tickers.length || minLen < 1) return {};
+    const pctMap = {};
+    for (const tk of tickers) pctMap[tk] = [];
+    for (let bar = 0; bar < minLen; bar++) {
+      const n = tickers.length;
+      const vals = tickers.map(tk => {
+        const arr = rawRS[tk];
+        return { tk, v: arr[arr.length - minLen + bar] };
+      });
+      vals.sort((a, b) => a.v - b.v);
+      vals.forEach(({ tk }, i) => {
+        pctMap[tk].push(n <= 1 ? 50 : Math.round((i / (n - 1)) * 100));
+      });
+    }
+    return pctMap;
+  }
+
   function computeZScoreRS(tickerSeries, benchSeries, chartBars, lookback) {
     if (!tickerSeries || !benchSeries) return null;
     const useBars = Math.min(chartBars, tickerSeries.length - 1, benchSeries.length - 1);
@@ -2475,6 +2535,58 @@
     }
   }
 
+  function drawPercentileChart(canvas, pct, xLabels) {
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width, H = canvas.height;
+    const PL = 36, PR = 12, PT = 10, PB = 22;
+    const cW = W - PL - PR, cH = H - PT - PB;
+    const N = pct.length;
+    if (!N) return;
+    const px = i => PL + (i / Math.max(N - 1, 1)) * cW;
+    const py = v => H - PB - (v / 100) * cH;
+
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0d1117'; ctx.fillRect(0, 0, W, H);
+
+    ctx.fillStyle = 'rgba(63,185,80,0.06)';
+    ctx.fillRect(PL, py(90), cW, py(75) - py(90));
+    ctx.fillStyle = 'rgba(248,81,73,0.06)';
+    ctx.fillRect(PL, py(25), cW, py(10) - py(25));
+
+    ctx.setLineDash([3, 5]);
+    ctx.font = '9px system-ui,sans-serif'; ctx.textBaseline = 'middle'; ctx.textAlign = 'right';
+    for (const [ref, col] of [[90,'#3fb95050'],[75,'#3fb95030'],[50,'#484f58'],[25,'#f8514930'],[10,'#f8514950']]) {
+      ctx.strokeStyle = col; ctx.lineWidth = ref === 50 ? 1.5 : 1;
+      ctx.beginPath(); ctx.moveTo(PL, py(ref)); ctx.lineTo(W - PR, py(ref)); ctx.stroke();
+      ctx.fillStyle = '#484f58';
+      ctx.fillText(ref + '%', PL - 3, py(ref));
+    }
+    ctx.setLineDash([]);
+
+    const lastPct = pct[N - 1];
+    ctx.beginPath();
+    ctx.moveTo(px(0), py(50));
+    for (let i = 0; i < N; i++) ctx.lineTo(px(i), py(pct[i]));
+    ctx.lineTo(px(N - 1), py(50));
+    ctx.closePath();
+    ctx.fillStyle = lastPct >= 50 ? 'rgba(63,185,80,0.15)' : 'rgba(248,81,73,0.15)';
+    ctx.fill();
+
+    const color = lastPct >= 50 ? '#3fb950' : '#f85149';
+    ctx.beginPath();
+    ctx.moveTo(px(0), py(pct[0]));
+    for (let i = 1; i < N; i++) ctx.lineTo(px(i), py(pct[i]));
+    ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.stroke();
+
+    ctx.beginPath(); ctx.arc(px(N - 1), py(lastPct), 3, 0, Math.PI * 2);
+    ctx.fillStyle = color; ctx.fill();
+
+    if (xLabels && xLabels.length) {
+      ctx.fillStyle = '#484f58'; ctx.font = '9px system-ui,sans-serif'; ctx.textBaseline = 'top';
+      for (const { i, label, align } of xLabels) { ctx.textAlign = align || 'center'; ctx.fillText(label, px(i), H - PB + 3); }
+    }
+  }
+
   function drawZScoreChart(canvas, z, xLabels) {
     const ctx = canvas.getContext('2d');
     const W = canvas.width, H = canvas.height;
@@ -2548,18 +2660,33 @@
     if (!benchData) { alert('No data loaded yet.'); return; }
     const chartBars = Math.min(barSel, cfg.maxBars);
     const benchSlice = benchData.slice(-(chartBars + 1));
-    const entries = filteredData
-      .filter(r => !r.failed && r[cfg.key])
-      .map(r => {
-        const data = chartType === 'raw'
-          ? computeRawRS(r[cfg.key], benchSlice, chartBars)
-          : computeZScoreRS(r[cfg.key], benchSlice, chartBars, cfg.lookback);
-        return { ticker: r.ticker, data };
-      })
-      .filter(e => e.data !== null)
-      .sort((a, b) => b.data[b.data.length - 1] - a.data[a.data.length - 1]);
 
-    const typeLabel = chartType === 'raw' ? 'Raw RS (cumulative %)' : `${cfg.label} Z-Score`;
+    const baseRows = filteredData
+      .filter(r => !r.failed && r[cfg.key])
+      .filter(r => !_zsMansfieldFilter || (r.mansRS != null && r.mansRS > 0));
+
+    let entries;
+    if (chartType === 'pct') {
+      const pctMap = computeAllPercentileRS(baseRows, cfg, chartBars);
+      entries = baseRows
+        .map(r => ({ ticker: r.ticker, data: pctMap[r.ticker] || null }))
+        .filter(e => e.data && e.data.length >= 2)
+        .sort((a, b) => b.data[b.data.length - 1] - a.data[a.data.length - 1]);
+    } else {
+      entries = baseRows
+        .map(r => {
+          const data = chartType === 'raw'
+            ? computeRawRS(r[cfg.key], benchSlice, chartBars)
+            : computeZScoreRS(r[cfg.key], benchSlice, chartBars, cfg.lookback);
+          return { ticker: r.ticker, data };
+        })
+        .filter(e => e.data !== null)
+        .sort((a, b) => b.data[b.data.length - 1] - a.data[a.data.length - 1]);
+    }
+
+    const typeLabel = chartType === 'pct' ? 'RS Percentile (cross-sectional)'
+      : chartType === 'raw' ? 'Raw RS (cumulative %)'
+      : `${cfg.label} Z-Score`;
     document.getElementById('zsViewMeta').textContent =
       `${typeLabel} · sorted by today's score · ${entries.length} tickers`;
 
@@ -2567,7 +2694,9 @@
     grid.innerHTML = '';
     for (const { ticker, data } of entries) {
       const lastVal = data[data.length - 1];
-      const scoreText = chartType === 'raw'
+      const scoreText = chartType === 'pct'
+        ? `${Math.round(lastVal)}th %ile`
+        : chartType === 'raw'
         ? `${lastVal >= 0 ? '+' : ''}${lastVal.toFixed(2)}%`
         : `${lastVal >= 0 ? '+' : ''}${lastVal.toFixed(2)}σ`;
       const card = document.createElement('div');
@@ -2575,12 +2704,13 @@
       card.innerHTML = `
         <div class="zs-card-header">
           <span class="zs-ticker">${ticker}</span>
-          <span class="zs-score ${lastVal >= 0 ? 'pos' : 'neg'}">${scoreText}</span>
+          <span class="zs-score ${lastVal >= 50 || (chartType !== 'pct' && lastVal >= 0) ? 'pos' : 'neg'}">${scoreText}</span>
         </div>
         <canvas class="zs-canvas" width="760" height="110"></canvas>`;
       grid.appendChild(card);
       const xLabels = buildZXLabels(data.length, cfg.mode);
       if (chartType === 'raw') drawRawRSChart(card.querySelector('canvas'), data, xLabels);
+      else if (chartType === 'pct') drawPercentileChart(card.querySelector('canvas'), data, xLabels);
       else drawZScoreChart(card.querySelector('canvas'), data, xLabels);
     }
     document.getElementById('zsView').style.display = 'block';
@@ -2593,10 +2723,17 @@
     else view.style.display = 'none';
   }
 
+  function toggleZSMansfieldFilter() {
+    _zsMansfieldFilter = document.getElementById('zsMansfieldChk').checked;
+    renderZScoreView();
+  }
+
   // ── Candlestick Chart View ────────────────────────────────────────────────
 
   const _ohlcCache = {};
   let _csSortAsc = false;
+  let _zsMansfieldFilter = false;
+  let _csMansfieldFilter = false;
 
   async function fetchOHLC(ticker, interval, range) {
     const cacheKey = `${ticker}_${interval}_${range}`;
@@ -2778,6 +2915,7 @@
 
     const ranked = filteredData
       .filter(r => !r.failed)
+      .filter(r => !_csMansfieldFilter || (r.mansRS != null && r.mansRS > 0))
       .slice()
       .sort((a, b) => _csSortAsc
         ? (a[sortBy] ?? -Infinity) - (b[sortBy] ?? -Infinity)
@@ -2830,6 +2968,11 @@
     _csSortAsc = !_csSortAsc;
     const btn = document.getElementById('csSortDirBtn');
     if (btn) btn.innerHTML = _csSortAsc ? '&#9650; Asc' : '&#9660; Desc';
+    renderCandlestickView();
+  }
+
+  function toggleCSMansfieldFilter() {
+    _csMansfieldFilter = document.getElementById('csMansfieldChk').checked;
     renderCandlestickView();
   }
 
@@ -2982,6 +3125,7 @@
         <select id="zsChartTypeSelect" onchange="renderZScoreView()">
           <option value="zscore">Z-Score</option>
           <option value="raw">Raw RS</option>
+          <option value="pct">RS Percentile</option>
         </select>
         <select id="zsBarSelect" onchange="renderZScoreView()">
           <option value="9">9 Bars</option>
@@ -3000,6 +3144,7 @@
           <option value="1d">1-Day (Hourly)</option>
           <option value="1h">1-Hour</option>
         </select>
+        <label class="mansfield-chk-wrap"><input type="checkbox" id="zsMansfieldChk" onchange="toggleZSMansfieldFilter()"> Mansfield RS&gt;0</label>
         <button id="zsViewClose" onclick="document.getElementById('zsView').style.display='none'">×</button>
       </div>
     </div>
@@ -3047,6 +3192,7 @@
         <button id="csSortDirBtn" onclick="toggleCSSortDir()">&#9660; Desc</button>
         <button class="cs-export-btn" onclick="exportCandlesticksPNG()">&#8681; PNG</button>
         <button id="csExportJSONBtn" class="cs-export-btn" onclick="exportCandlesticksJSON()">&#8681; JSON</button>
+        <label class="mansfield-chk-wrap"><input type="checkbox" id="csMansfieldChk" onchange="toggleCSMansfieldFilter()"> Mansfield RS&gt;0</label>
         <button id="csViewClose" onclick="document.getElementById('csView').style.display='none'">×</button>
       </div>
     </div>
