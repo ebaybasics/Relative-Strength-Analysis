@@ -1992,6 +1992,20 @@
   let _zsMansfieldFilter = false;
   let _csMansfieldFilter = false;
   const _bvStore = {};
+  const AV_KEY = '18KUX4280VTA9S0R';
+
+  async function fetchBreadthAV(ticker) {
+    const url = `https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol=${ticker}&outputsize=full&apikey=${AV_KEY}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`AV HTTP ${res.status}`);
+    const json = await res.json();
+    if (json['Note'] || json['Information']) throw new Error('AV rate limit: ' + (json['Note'] || json['Information']));
+    const ts = json['Time Series (Daily)'];
+    if (!ts) throw new Error('AV no data for ' + ticker);
+    const closes = Object.keys(ts).sort().map(d => parseFloat(ts[d]['4. close']));
+    if (!closes.length) throw new Error('AV empty series');
+    return closes;
+  }
 
   async function fetchOHLC(ticker, interval, range) {
     const cacheKey = `${ticker}_${interval}_${range}`;
@@ -2324,9 +2338,23 @@
 
       for (const { ticker } of toFetch) {
         updateStatus(ticker);
-        try { _bvStore[ticker] = await fetchWithRetry(ticker, '1d', '1y'); }
-        catch { _bvStore[ticker] = null; errors++; }
+        try { _bvStore[ticker] = await fetchBreadthAV(ticker); }
+        catch (e) { _bvStore[ticker] = null; errors++; console.warn('BV fetch failed', ticker, e.message); }
         done++;
+        if (done < toFetch.length) {
+          // AV free tier: 5 req/min — wait ~13s and show countdown
+          for (let s = 13; s > 0; s--) {
+            grid.innerHTML = `<div class="cs-loading" style="text-align:left;line-height:1.8">
+              <div style="color:#58a6ff;margin-bottom:6px">Loading breadth data&hellip; ${Math.round((done/toFetch.length)*100)}%</div>
+              <div style="color:#8b949e;font-size:0.8rem">Rate limit cooldown: <span style="color:#e6edf3">${s}s</span></div>
+              <div style="color:#6e7681;font-size:0.78rem;margin-top:4px">${done} of ${toFetch.length} fetched${errors ? ` · <span style="color:#f85149">${errors} failed</span>` : ''}</div>
+              <div style="background:#21262d;border-radius:4px;height:4px;margin-top:10px;width:100%">
+                <div style="background:#58a6ff;height:4px;border-radius:4px;width:${Math.round((done/toFetch.length)*100)}%;transition:width 0.2s"></div>
+              </div>
+            </div>`;
+            await sleep(1000);
+          }
+        }
       }
     }
 
