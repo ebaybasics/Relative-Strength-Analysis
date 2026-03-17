@@ -215,6 +215,18 @@
     #zsLookbackSelect, #zsChartTypeSelect, #zsBarSelect { background:#21262d; border:1px solid #30363d; color:#e6edf3; padding:5px 10px; border-radius:6px; font-size:0.82rem; cursor:pointer; }
     #zsLookbackSelect:focus, #zsChartTypeSelect:focus, #zsBarSelect:focus { outline:none; border-color:#58a6ff; }
 
+    /* ── Breadth Chart View ── */
+    #bvView { position:fixed; inset:0; background:#0d1117; overflow-y:auto; z-index:900; display:none; }
+    #bvViewInner { max-width:820px; margin:0 auto; padding:28px 24px; }
+    #bvViewHeader { display:flex; align-items:center; justify-content:space-between; margin-bottom:24px; padding-bottom:16px; border-bottom:1px solid #21262d; }
+    #bvViewTitle  { font-size:1.1rem; color:#58a6ff; font-weight:600; }
+    #bvViewMeta   { font-size:0.78rem; color:#6e7681; }
+    #bvViewClose  { background:none; border:none; color:#8b949e; font-size:24px; cursor:pointer; line-height:1; }
+    #bvViewClose:hover { color:#e6edf3; }
+    #bvBarSelect  { background:#21262d; border:1px solid #30363d; color:#e6edf3; padding:5px 10px; border-radius:6px; font-size:0.82rem; cursor:pointer; }
+    #bvNavLink    { font-size:0.82rem; color:#8b949e; text-decoration:none; border:1px solid #30363d; border-radius:6px; padding:4px 10px; white-space:nowrap; }
+    #bvNavLink:hover { color:#58a6ff; border-color:#58a6ff; }
+
     /* ── Candlestick Chart View ── */
     #csView { position:fixed; inset:0; background:#0d1117; overflow-y:auto; z-index:900; display:none; }
     #csViewInner { max-width:820px; margin:0 auto; padding:28px 24px; }
@@ -260,6 +272,7 @@
   <div class="row-count" id="rowCount"></div>
   <a href="#" id="zsNavLink" onclick="toggleZSView(event)">&#8645; Z-Score Charts</a>
   <a href="#" id="csNavLink" onclick="toggleCSView(event)">&#9650;&#9660; Candlestick Charts</a>
+  <a href="#" id="bvNavLink" onclick="toggleBVView(event)">&#9643; Breadth Charts</a>
 </div>
 
 <div class="table-wrap" id="tableWrap">
@@ -449,6 +462,21 @@
   const SYMBOL_MAP = {
     'BTC': 'BTC-USD',
   };
+
+  const BREADTH_TICKERS = [
+    { ticker: 'S5TW',  group: '20-Day MA',  label: 'S&P 500 % Above 20-Day' },
+    { ticker: 'MMTW',  group: '20-Day MA',  label: 'NYSE % Above 20-Day' },
+    { ticker: 'R2TW',  group: '20-Day MA',  label: 'Russell 2000 % Above 20-Day' },
+    { ticker: 'NDTW',  group: '20-Day MA',  label: 'Nasdaq % Above 20-Day' },
+    { ticker: 'NDFI',  group: '50-Day MA',  label: 'Nasdaq % Above 50-Day' },
+    { ticker: 'MMFI',  group: '50-Day MA',  label: 'NYSE % Above 50-Day' },
+    { ticker: 'S5FI',  group: '50-Day MA',  label: 'S&P 500 % Above 50-Day' },
+    { ticker: 'R2FI',  group: '50-Day MA',  label: 'Russell 2000 % Above 50-Day' },
+    { ticker: 'NDTH',  group: '200-Day MA', label: 'Nasdaq % Above 200-Day' },
+    { ticker: 'S5TH',  group: '200-Day MA', label: 'S&P 500 % Above 200-Day' },
+    { ticker: 'MMTH',  group: '200-Day MA', label: 'NYSE % Above 200-Day' },
+    { ticker: 'R2TH',  group: '200-Day MA', label: 'Russell 2000 % Above 200-Day' },
+  ];
 
   let tableData       = [];
   let filteredData    = [];
@@ -1963,6 +1991,7 @@
   let _csSortAsc = false;
   let _zsMansfieldFilter = false;
   let _csMansfieldFilter = false;
+  const _bvStore = {};
 
   async function fetchOHLC(ticker, interval, range) {
     const cacheKey = `${ticker}_${interval}_${range}`;
@@ -2205,6 +2234,139 @@
     renderCandlestickView();
   }
 
+  // ── Breadth Chart View ────────────────────────────────────────────────────
+
+  function drawBreadthLine(canvas, closes, barCount) {
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width, H = canvas.height;
+    const PL = 44, PR = 16, PT = 10, PB = 22;
+    const cW = W - PL - PR, cH = H - PT - PB;
+    const data = closes.slice(-barCount);
+    const N = data.length;
+    if (!N) return;
+    const px = i => PL + (i / Math.max(N - 1, 1)) * cW;
+    const py = v => H - PB - (v / 100) * cH;
+
+    ctx.clearRect(0, 0, W, H);
+    ctx.fillStyle = '#0d1117'; ctx.fillRect(0, 0, W, H);
+
+    // Zones
+    ctx.fillStyle = 'rgba(63,185,80,0.06)';
+    ctx.fillRect(PL, py(80), cW, py(60) - py(80));
+    ctx.fillStyle = 'rgba(248,81,73,0.06)';
+    ctx.fillRect(PL, py(40), cW, py(20) - py(40));
+
+    // Reference lines
+    ctx.setLineDash([3, 5]);
+    ctx.font = '9px system-ui,sans-serif'; ctx.textBaseline = 'middle'; ctx.textAlign = 'right';
+    for (const [ref, col] of [[80,'#3fb95050'],[60,'#21262d'],[50,'#484f58'],[40,'#21262d'],[20,'#f8514950']]) {
+      ctx.strokeStyle = col; ctx.lineWidth = ref === 50 ? 1.5 : 1;
+      ctx.beginPath(); ctx.moveTo(PL, py(ref)); ctx.lineTo(W - PR, py(ref)); ctx.stroke();
+      ctx.fillStyle = '#484f58';
+      ctx.fillText(ref + '%', PL - 3, py(ref));
+    }
+    ctx.setLineDash([]);
+
+    const lastV = data[N - 1];
+    const color = lastV > 60 ? '#3fb950' : lastV < 40 ? '#f85149' : '#e3b341';
+    const areaC = lastV > 60 ? 'rgba(63,185,80,0.15)' : lastV < 40 ? 'rgba(248,81,73,0.15)' : 'rgba(227,179,65,0.12)';
+
+    ctx.beginPath();
+    ctx.moveTo(px(0), py(50));
+    for (let i = 0; i < N; i++) ctx.lineTo(px(i), py(data[i]));
+    ctx.lineTo(px(N - 1), py(50));
+    ctx.closePath();
+    ctx.fillStyle = areaC; ctx.fill();
+
+    ctx.beginPath();
+    ctx.moveTo(px(0), py(data[0]));
+    for (let i = 1; i < N; i++) ctx.lineTo(px(i), py(data[i]));
+    ctx.strokeStyle = color; ctx.lineWidth = 1.5; ctx.stroke();
+
+    ctx.beginPath(); ctx.arc(px(N - 1), py(lastV), 3, 0, Math.PI * 2);
+    ctx.fillStyle = color; ctx.fill();
+
+    // X labels
+    ctx.fillStyle = '#484f58'; ctx.font = '9px system-ui,sans-serif'; ctx.textBaseline = 'top';
+    const lStep = Math.max(1, Math.round(N / 6));
+    for (let i = 0; i < N; i += lStep) {
+      const mo = Math.round((N - 1 - i) / 21);
+      ctx.textAlign = i === 0 ? 'left' : 'center';
+      ctx.fillText(mo ? mo + 'mo' : 'Now', px(i), H - PB + 3);
+    }
+    ctx.textAlign = 'right'; ctx.fillText('Now', px(N - 1), H - PB + 3);
+  }
+
+  async function renderBreadthView() {
+    const barCount = parseInt(document.getElementById('bvBarSelect')?.value || '200', 10);
+    document.getElementById('bvView').style.display = 'block';
+    const grid = document.getElementById('bvViewGrid');
+    grid.innerHTML = '<div class="cs-loading">Loading breadth data&hellip;</div>';
+
+    // Fetch any uncached tickers
+    for (const { ticker } of BREADTH_TICKERS) {
+      if (_bvStore[ticker] === undefined) {
+        try { _bvStore[ticker] = await fetchWithRetry(ticker, '1d', '1y'); }
+        catch { _bvStore[ticker] = null; }
+      }
+    }
+
+    const loaded = BREADTH_TICKERS.filter(b => _bvStore[b.ticker]?.length).length;
+    document.getElementById('bvViewMeta').textContent =
+      `Last ${barCount} daily bars · ${loaded} of ${BREADTH_TICKERS.length} indicators loaded`;
+
+    grid.innerHTML = '';
+
+    // Group by MA period
+    const seen = new Map();
+    for (const b of BREADTH_TICKERS) {
+      if (!seen.has(b.group)) seen.set(b.group, []);
+      seen.get(b.group).push(b);
+    }
+
+    for (const [group, items] of seen) {
+      const section = document.createElement('div');
+      section.style.cssText = 'margin-bottom:28px';
+
+      const heading = document.createElement('div');
+      heading.style.cssText = 'font-size:0.75rem;color:#6e7681;font-weight:600;letter-spacing:0.6px;text-transform:uppercase;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid #21262d';
+      heading.textContent = group;
+      section.appendChild(heading);
+
+      for (const { ticker, label } of items) {
+        const closes = _bvStore[ticker];
+        if (!closes?.length) {
+          const err = document.createElement('div');
+          err.style.cssText = 'color:#484f58;font-size:0.8rem;padding:8px 0';
+          err.textContent = `${ticker} — no data`;
+          section.appendChild(err);
+          continue;
+        }
+        const lastV = closes[closes.length - 1];
+        const scoreClass = lastV > 60 ? 'pos' : lastV < 40 ? 'neg' : '';
+        const card = document.createElement('div');
+        card.className = 'zs-card';
+        card.innerHTML = `
+          <div class="zs-card-header">
+            <span class="zs-ticker">${ticker}</span>
+            <span class="zs-industry">${label}</span>
+            <span class="zs-score ${scoreClass}">${lastV.toFixed(2)}%</span>
+          </div>
+          <canvas class="zs-canvas" width="760" height="110"></canvas>`;
+        section.appendChild(card);
+        drawBreadthLine(card.querySelector('canvas'), closes, barCount);
+      }
+      grid.appendChild(section);
+    }
+  }
+
+  function toggleBVView(e) {
+    e.preventDefault();
+    const view = document.getElementById('bvView');
+    if (view.style.display === 'none' || !view.style.display) renderBreadthView();
+    else view.style.display = 'none';
+  }
+
   // ── Candlestick Export ────────────────────────────────────────────────────
 
   function exportCandlesticksPNG() {
@@ -2404,6 +2566,27 @@
       </div>
     </div>
     <div id="csViewGrid"></div>
+  </div>
+</div>
+<div id="bvView" style="display:none">
+  <div id="bvViewInner">
+    <div id="bvViewHeader">
+      <div>
+        <div id="bvViewTitle">Breadth Indicator Charts</div>
+        <div id="bvViewMeta"></div>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px">
+        <select id="bvBarSelect" onchange="renderBreadthView()">
+          <option value="20">20 Bars</option>
+          <option value="50">50 Bars</option>
+          <option value="100">100 Bars</option>
+          <option value="150">150 Bars</option>
+          <option value="200" selected>200 Bars</option>
+        </select>
+        <button id="bvViewClose" onclick="document.getElementById('bvView').style.display='none'">×</button>
+      </div>
+    </div>
+    <div id="bvViewGrid"></div>
   </div>
 </div>
 <div id="rsChartOverlay" style="display:none" onclick="if(event.target===this)this.style.display='none'">
