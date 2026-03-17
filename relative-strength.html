@@ -2301,18 +2301,37 @@
     const barCount = parseInt(document.getElementById('bvBarSelect')?.value || '200', 10);
     document.getElementById('bvView').style.display = 'block';
     const grid = document.getElementById('bvViewGrid');
-    grid.innerHTML = '<div class="cs-loading">Loading breadth data&hellip;</div>';
+    const meta = document.getElementById('bvViewMeta');
 
-    // Fetch any uncached tickers
-    for (const { ticker } of BREADTH_TICKERS) {
-      if (_bvStore[ticker] === undefined) {
+    // Fetch any uncached tickers with live progress updates
+    const toFetch = BREADTH_TICKERS.filter(b => _bvStore[b.ticker] === undefined);
+    if (toFetch.length) {
+      let done = 0, errors = 0;
+      const total = BREADTH_TICKERS.length;
+      grid.innerHTML = '';
+      const updateStatus = (current) => {
+        const pct = Math.round((done / toFetch.length) * 100);
+        grid.innerHTML = `<div class="cs-loading" style="text-align:left;line-height:1.8">
+          <div style="color:#58a6ff;margin-bottom:6px">Loading breadth data&hellip; ${pct}%</div>
+          <div style="color:#8b949e;font-size:0.8rem">Fetching: <span style="color:#e6edf3">${current}</span></div>
+          <div style="color:#6e7681;font-size:0.78rem;margin-top:4px">${done} of ${toFetch.length} fetched${errors ? ` · <span style="color:#f85149">${errors} failed</span>` : ''}</div>
+          <div style="background:#21262d;border-radius:4px;height:4px;margin-top:10px;width:100%">
+            <div style="background:#58a6ff;height:4px;border-radius:4px;width:${pct}%;transition:width 0.2s"></div>
+          </div>
+        </div>`;
+        meta.textContent = `Fetching ${done}/${toFetch.length}…`;
+      };
+
+      for (const { ticker } of toFetch) {
+        updateStatus(ticker);
         try { _bvStore[ticker] = await fetchWithRetry(ticker, '1d', '1y'); }
-        catch { _bvStore[ticker] = null; }
+        catch { _bvStore[ticker] = null; errors++; }
+        done++;
       }
     }
 
     const loaded = BREADTH_TICKERS.filter(b => _bvStore[b.ticker]?.length).length;
-    document.getElementById('bvViewMeta').textContent =
+    meta.textContent =
       `Last ${barCount} daily bars · ${loaded} of ${BREADTH_TICKERS.length} indicators loaded`;
 
     grid.innerHTML = '';
