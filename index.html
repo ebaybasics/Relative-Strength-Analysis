@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RS Dashboard</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg:       #0d1117;
+    --surface:  #161b22;
+    --card:     #21262d;
+    --border:   #30363d;
+    --blue:     #58a6ff;
+    --text:     #e6edf3;
+    --muted:    #8b949e;
+    --dim:      #6e7681;
+    --green:    #3fb950;
+    --red:      #f85149;
+    --yellow:   #d29922;
+  }
+
+  html, body {
+    height: 100%;
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Cascadia Code', 'SF Mono', 'Consolas', 'Liberation Mono', monospace;
+    overflow-x: hidden;
+  }
+
+  /* Subtle grid background */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image:
+      linear-gradient(var(--border) 1px, transparent 1px),
+      linear-gradient(90deg, var(--border) 1px, transparent 1px);
+    background-size: 48px 48px;
+    opacity: 0.25;
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  .wrap {
+    position: relative;
+    z-index: 1;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 48px 24px;
+  }
+
+  /* ── Header ── */
+  header {
+    text-align: center;
+    margin-bottom: 56px;
+  }
+
+  .header-eyebrow {
+    font-size: 0.7rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--blue);
+    margin-bottom: 12px;
+    opacity: 0.85;
+  }
+
+  .header-title {
+    font-size: clamp(1.8rem, 5vw, 2.6rem);
+    font-weight: 700;
+    color: var(--text);
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+  }
+
+  .header-title span {
+    color: var(--blue);
+  }
+
+  .header-sub {
+    margin-top: 10px;
+    font-size: 0.78rem;
+    color: var(--muted);
+    letter-spacing: 0.04em;
+  }
+
+  .header-divider {
+    width: 40px;
+    height: 1px;
+    background: var(--border);
+    margin: 20px auto 0;
+  }
+
+  /* ── Cards ── */
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+    width: 100%;
+    max-width: 860px;
+  }
+
+  @media (max-width: 680px) {
+    .cards { grid-template-columns: 1fr; max-width: 380px; }
+  }
+
+  .card {
+    display: flex;
+    flex-direction: column;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 28px 24px 24px;
+    text-decoration: none;
+    color: inherit;
+    cursor: pointer;
+    position: relative;
+    overflow: hidden;
+    transition: border-color 0.18s, transform 0.18s, box-shadow 0.18s;
+    animation: fadeUp 0.4s ease both;
+  }
+
+  .card:nth-child(1) { animation-delay: 0.05s; }
+  .card:nth-child(2) { animation-delay: 0.12s; }
+  .card:nth-child(3) { animation-delay: 0.19s; }
+
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(14px); }
+    to   { opacity: 1; transform: translateY(0); }
+  }
+
+  .card::after {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: var(--blue);
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.22s ease;
+    border-radius: 10px 10px 0 0;
+  }
+
+  .card:hover {
+    border-color: var(--blue);
+    transform: translateY(-3px);
+    box-shadow: 0 8px 32px rgba(88, 166, 255, 0.08);
+  }
+
+  .card:hover::after {
+    transform: scaleX(1);
+  }
+
+  .card-tag {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.65rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--blue);
+    background: rgba(88, 166, 255, 0.08);
+    border: 1px solid rgba(88, 166, 255, 0.2);
+    border-radius: 4px;
+    padding: 3px 8px;
+    margin-bottom: 18px;
+    width: fit-content;
+  }
+
+  .card-tag-dot {
+    width: 5px; height: 5px;
+    border-radius: 50%;
+    background: var(--blue);
+    flex-shrink: 0;
+  }
+
+  .card-title {
+    font-size: 1.05rem;
+    font-weight: 600;
+    color: var(--text);
+    letter-spacing: -0.01em;
+    margin-bottom: 10px;
+  }
+
+  .card-desc {
+    font-size: 0.74rem;
+    color: var(--muted);
+    line-height: 1.65;
+    flex: 1;
+  }
+
+  .card-footer {
+    margin-top: 22px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.68rem;
+    color: var(--dim);
+  }
+
+  .card-arrow {
+    font-size: 0.82rem;
+    color: var(--blue);
+    opacity: 0;
+    transform: translateX(-4px);
+    transition: opacity 0.18s, transform 0.18s;
+  }
+
+  .card:hover .card-arrow {
+    opacity: 1;
+    transform: translateX(0);
+  }
+
+  /* ── Footer ── */
+  footer {
+    margin-top: 52px;
+    font-size: 0.68rem;
+    color: var(--dim);
+    letter-spacing: 0.05em;
+    text-align: center;
+  }
+
+  footer a { color: var(--dim); text-decoration: none; }
+  footer a:hover { color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="header-eyebrow">&#9643; Market Analytics Suite</div>
+    <div class="header-title">RS <span>Dashboard</span></div>
+    <div class="header-sub">Relative Strength · Breadth · Industry Analysis</div>
+    <div class="header-divider"></div>
+  </header>
+
+  <div class="cards">
+
+    <a class="card" href="relative-strength.html">
+      <div class="card-tag"><span class="card-tag-dot"></span>Core</div>
+      <div class="card-title">Relative Strength</div>
+      <div class="card-desc">SPY-benchmarked RS scoring across your watchlist. Z-score charts, RS percentile ranking, Mansfield RS filter, and breadth indicator charts.</div>
+      <div class="card-footer">
+        <span>SPY Benchmark &middot; Breadth</span>
+        <span class="card-arrow">&#8594;</span>
+      </div>
+    </a>
+
+    <a class="card" href="custom-rs.html">
+      <div class="card-tag"><span class="card-tag-dot"></span>Custom</div>
+      <div class="card-title">Custom RS</div>
+      <div class="card-desc">Import your own CSV ticker list. Define a custom benchmark, run z-score analysis, RS percentile charts, and Mansfield RS filtering on any universe.</div>
+      <div class="card-footer">
+        <span>CSV Import &middot; Z-Score</span>
+        <span class="card-arrow">&#8594;</span>
+      </div>
+    </a>
+
+    <a class="card" href="industry-analysis.html">
+      <div class="card-tag"><span class="card-tag-dot"></span>Sector</div>
+      <div class="card-title">Industry Analysis</div>
+      <div class="card-desc">Sector and industry RS heatmap across 193 tickers. Identify rotation, compare groups, and drill into individual industry performance.</div>
+      <div class="card-footer">
+        <span>193 Tickers &middot; Heatmap</span>
+        <span class="card-arrow">&#8594;</span>
+      </div>
+    </a>
+
+  </div>
+
+  <footer>
+    <script>document.write(new Date().getFullYear())</script> RS Dashboard &nbsp;&middot;&nbsp; Local
+  </footer>
+
+</div>
+</body>
+</html>
