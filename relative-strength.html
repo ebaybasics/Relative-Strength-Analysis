@@ -460,6 +460,8 @@
     u => `https://corsproxy.io/?${encodeURIComponent(u)}`,
     u => `https://api.allorigins.win/raw?url=${encodeURIComponent(u)}`,
     u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
+    u => `https://thingproxy.freeboard.io/fetch/${u}`,
+    u => `https://corsproxy.io/?url=${encodeURIComponent(u)}`,
   ];
 
   const SYMBOL_MAP = {
@@ -675,19 +677,29 @@
   async function loadData() {
     const statusEl = document.getElementById('status');
     const allNeeded = [...new Set([...TICKERS, 'SPY'])];
-    const store = {};
+    const dailyStore = {};
+    const hourlyStore = {};
     let done = 0;
 
-    function setStatus(extra) {
-      statusEl.innerHTML = `${extra}<div class="prog-wrap"><div class="prog-bar" id="progress" style="width:${Math.round(done/allNeeded.length*100)}%"></div></div>`;
+    function setStatus(ticker, phase) {
+      const pct = Math.round(done / allNeeded.length * 100);
+      statusEl.innerHTML = `
+        <div style="margin-bottom:6px">
+          ${phase === 'daily' ? 'Fetching daily data' : 'Fetching hourly data (background)'}&hellip;
+          <span style="color:#e6edf3">${ticker}</span>
+          <span style="color:#6e7681;font-size:0.8em">(${done}/${allNeeded.length})</span>
+        </div>
+        <div class="prog-wrap"><div class="prog-bar" id="progress" style="width:${pct}%"></div></div>`;
     }
-    setStatus('Fetching market data&hellip;');
+    setStatus('', 'daily');
 
+    // ── Phase 1: daily only ────────────────────────────────────────────────
     for (let i = 0; i < allNeeded.length; i += BATCH_SIZE) {
       const batch = allNeeded.slice(i, i + BATCH_SIZE);
       await Promise.all(batch.map(async t => {
-        try   { store[t] = await loadTicker(t); }
-        catch { store[t] = { daily: null, hourly: null }; }
+        setStatus(t, 'daily');
+        try   { dailyStore[t] = await fetchWithRetry(t, '1d', '1y'); }
+        catch { dailyStore[t] = null; }
         done++;
         const bar = document.getElementById('progress');
         if (bar) bar.style.width = `${Math.round(done/allNeeded.length*100)}%`;
@@ -695,23 +707,40 @@
       if (i + BATCH_SIZE < allNeeded.length) await sleep(BATCH_DELAY);
     }
 
-    const spyD = store['SPY']?.daily;
-    const spyH = store['SPY']?.hourly;
+    const spyD = dailyStore['SPY'];
     if (!spyD) { showError('Could not load SPY data. Check connection and retry.'); return; }
-    _benchDailyRef  = spyD;
-    _benchHourlyRef = spyH;
+    _benchDailyRef = spyD;
 
-    tableData = TICKERS.map(t => buildRow(t, store[t]?.daily, store[t]?.hourly, spyD, spyH));
-    buildRRGData(store, 'SPY', TICKERS);
+    // Render table immediately with daily data (h1 will show — until hourly arrives)
+    tableData = TICKERS.map(t => buildRow(t, dailyStore[t], null, spyD, null));
+    buildRRGData({ ...Object.fromEntries(allNeeded.map(t => [t, { daily: dailyStore[t], hourly: null }])) }, 'SPY', TICKERS);
 
     statusEl.style.display = 'none';
     document.getElementById('controls').style.display = 'flex';
     document.getElementById('tableWrap').style.display = 'block';
     document.getElementById('footer').textContent =
       `Data via Yahoo Finance · Updated ${new Date().toLocaleString()} · RS = excess return vs SPY (pp) · MA dist = % above/below moving average`;
-
     attachSortHandlers();
     applyFilter();
+
+    // ── Phase 2: hourly in background ─────────────────────────────────────
+    done = 0;
+    (async () => {
+      for (let i = 0; i < allNeeded.length; i += BATCH_SIZE) {
+        const batch = allNeeded.slice(i, i + BATCH_SIZE);
+        await Promise.all(batch.map(async t => {
+          try   { hourlyStore[t] = await fetchWithRetry(t, '1h', '5d'); }
+          catch { hourlyStore[t] = null; }
+          done++;
+        }));
+        if (i + BATCH_SIZE < allNeeded.length) await sleep(BATCH_DELAY);
+      }
+      const spyH = hourlyStore['SPY'];
+      _benchHourlyRef = spyH;
+      // Patch h1 values and re-render
+      tableData = TICKERS.map(t => buildRow(t, dailyStore[t], hourlyStore[t], spyD, spyH));
+      applyFilter();
+    })();
   }
 
   // ── Filter ────────────────────────────────────────────────────────────────
